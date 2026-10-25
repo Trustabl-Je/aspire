@@ -226,12 +226,35 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("""{"DOCS":{"llmsTxtUrl":"https://example.test/llms.txt"},"docs":{"api":{"sitemapUrl":"https://example.test/sitemap.xml"}}}""")]
+    [InlineData("""{"docs":{"api":{"sitemapUrl":"https://example.test/sitemap.xml"}},"DOCS":{"llmsTxtUrl":"https://example.test/llms.txt"}}""")]
+    [InlineData("""{"docs":{"llmsTxtUrl":"https://example.test/llms.txt","API":{"custom":"excluded"},"api":{"sitemapUrl":"https://example.test/sitemap.xml"}}}""")]
+    [InlineData("""{"DOCS":null,"docs":{"llmsTxtUrl":"https://example.test/llms.txt","api":{"sitemapUrl":"https://example.test/sitemap.xml"}}}""")]
+    public async Task Materialize_ReadsAllowedLeavesAcrossCaseInsensitiveSections(string content)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, content);
+        var source = new ConfigSource { Repository = workspace.Path, Path = AspireConfigFile.FileName };
+        var project = workspace.CreateDirectory("project");
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
+            git: new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment()));
+
+        await service.MaterializeAsync(source, project, TestContext.Current.CancellationToken);
+
+        var config = AspireConfigFile.Load(project.FullName)!;
+        Assert.Equal("https://example.test/llms.txt", config.Docs!.LlmsTxtUrl);
+        Assert.Equal("https://example.test/sitemap.xml", config.Docs.Api!.SitemapUrl);
+    }
+
+    [Theory]
     [InlineData("null")]
     [InlineData("[]")]
     [InlineData("{")]
     [InlineData("""{"features":{"test":"not-a-boolean"}}""")]
     [InlineData("""{"features:test":"not-a-boolean"}""")]
     [InlineData("""{"features":{"test":true},"features":{"test":false}}""")]
+    [InlineData("""{"DOCS":{"llmsTxtUrl":"https://example.test/first"},"docs":{"LLMSTXTURL":"https://example.test/second"}}""")]
+    [InlineData("""{"docs":{"API":{"sitemapUrl":"https://example.test/first"},"api":{"SITEMAPURL":"https://example.test/second"}}}""")]
     [InlineData("""{"configSource:repository":"https://example.com/nested"}""")]
     [InlineData("""{"configSource":{"repository":"https://example.com/nested","path":"config.json"}}""")]
     public async Task Acquire_RejectsInvalidConfiguration(string content)

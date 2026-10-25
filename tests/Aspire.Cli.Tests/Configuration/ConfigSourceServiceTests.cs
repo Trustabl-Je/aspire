@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
@@ -14,6 +15,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared.Telemetry;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Configuration;
@@ -737,6 +739,40 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
         Assert.Equal(["configSource", "docs"], settings.Select(p => p.Key));
         Assert.Equal(["llmsTxtUrl", "api"], settings["docs"]!.AsObject().Select(p => p.Key));
+    }
+
+    [Fact]
+    public async Task Update_ReplacesLeavesInTheirExistingCaseInsensitiveSections()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        configuration["DOCS"] = JsonNode.Parse("""
+            {"llmsTxtUrl":"https://local.example/llms.txt","API":{"custom":"preserved"}}
+            """);
+        configuration["docs"] = JsonNode.Parse("""
+            {"api":{"SITEMAPURL":"https://local.example/sitemap.xml"}}
+            """);
+        await File.WriteAllTextAsync(path, configuration.ToJsonString());
+        var git = new TestConfigSourceGitClient
+        {
+            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", JsonNode.Parse("""
+                {"DOCS":{"llmsTxtUrl":"https://remote.example/llms.txt"},"docs":{"api":{"sitemapUrl":null,"excluded":"remote"}}}
+                """)!.AsObject()))
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
+
+        await service.CheckProjectAsync(workspace.WorkspaceRoot, force: true, CancellationToken.None);
+
+        var content = await File.ReadAllTextAsync(path);
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var parsed = new ConfigurationManager();
+        parsed.AddJsonStream(stream);
+        Assert.Equal("https://remote.example/llms.txt", parsed["docs:llmsTxtUrl"]);
+        Assert.Null(parsed["docs:api:sitemapUrl"]);
+        Assert.Equal("preserved", parsed["docs:api:custom"]);
+        await Verify(content, "json");
     }
 
     [Theory]

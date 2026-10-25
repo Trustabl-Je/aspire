@@ -572,21 +572,46 @@ internal sealed class ConfigSourceService(
 
     private static bool TryGetValue(JsonObject configuration, string[] path, out JsonNode? value)
     {
-        JsonNode? current = configuration;
-        foreach (var segment in path)
+        if (FindPropertyParent(configuration, path) is { } parent)
         {
-            if (current is not JsonObject obj || !obj.TryGetPropertyValue(GetKey(obj, segment), out current))
+            value = parent[GetKey(parent, path[^1])];
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
+    private static JsonObject? FindPropertyParent(JsonObject configuration, ReadOnlySpan<string> path)
+    {
+        if (path.Length == 1)
+        {
+            return configuration.ContainsKey(GetKey(configuration, path[0])) ? configuration : null;
+        }
+
+        // IConfiguration combines sections such as {"DOCS":{"llmsTxtUrl":"a"},"docs":{"api":{"sitemapUrl":"b"}}}.
+        // Search every matching section so an earlier partial section cannot hide a later leaf.
+        foreach (var (key, value) in configuration)
+        {
+            if (key.Equals(path[0], StringComparison.OrdinalIgnoreCase)
+                && value is JsonObject section
+                && FindPropertyParent(section, path[1..]) is { } parent)
             {
-                value = null;
-                return false;
+                return parent;
             }
         }
-        value = current;
-        return true;
+
+        return null;
     }
 
     private static void SetValue(JsonObject configuration, string[] path, JsonNode? value)
     {
+        if (FindPropertyParent(configuration, path) is { } parent)
+        {
+            parent[GetKey(parent, path[^1])] = value?.DeepClone();
+            return;
+        }
+
         var current = configuration;
         foreach (var segment in path[..^1])
         {
