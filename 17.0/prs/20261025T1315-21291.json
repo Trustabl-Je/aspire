@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only infrastructure change",
+  "mergedAt": "2026-10-25T13:15:06Z",
+  "number": 21291,
+  "runDate": "2026-10-25T18:04:00Z",
+  "status": "excluded",
+  "title": "test: Fix MSBuild diagnostics breaking property evaluation"
+}
