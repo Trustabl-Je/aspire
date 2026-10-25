@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "CI workflow and test-routing change only; no user-facing impact",
+  "mergedAt": "2026-10-24T19:47:46Z",
+  "number": 21270,
+  "runDate": "2026-10-25T00:06:45Z",
+  "status": "excluded",
+  "title": "Prevent extension E2E fan-out when VSIX packaging fails"
+}
