@@ -943,6 +943,22 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         Assert.False(channel.ShouldCreateNuGetConfig());
     }
 
+    [Theory]
+    [InlineData("stable", "https://api.nuget.org/v3/index.json", false)]
+    [InlineData("preview", "https://api.nuget.org/v3/index.json", false)]
+    [InlineData("stable", "https://enterprise.example/v3/index.json", true)]
+    [InlineData("stable", "/local/packages", true)]
+    [InlineData("daily", "https://daily.example/v3/index.json", true)]
+    public void ShouldCreateNuGetConfig_UsesResolvedSources(string name, string source, bool expected)
+    {
+        var channel = PackageChannel.CreateExplicitChannel(
+            name, PackageChannelQuality.Prerelease,
+            [new PackageMapping("Aspire*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+
+        Assert.Equal(expected, channel.ShouldCreateNuGetConfig());
+    }
+
     [Fact]
     public void IsBackedByLocalPackageDirectory_StableNamedChannelMappedToLocalDirectory_ReturnsTrue()
     {

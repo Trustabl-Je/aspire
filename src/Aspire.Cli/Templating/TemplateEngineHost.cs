@@ -8,7 +8,7 @@ using Microsoft.TemplateEngine.Utils;
 namespace Aspire.Cli.Templating;
 
 internal sealed class TemplateEngineHost(IReadOnlyList<(Type InterfaceType, IIdentifiedComponent Instance)> components)
-    : Microsoft.TemplateEngine.Edge.DefaultTemplateEngineHost("aspire", "1.0.0", builtIns: components), ITemplateEngineHost
+    : Microsoft.TemplateEngine.Edge.DefaultTemplateEngineHost("aspirecli", "1.0.0", builtIns: components, fallbackHostTemplateConfigNames: ["dotnetcli"]), ITemplateEngineHost
 {
     // Filter the source view rather than copying or modifying a user's checkout.
     // A .git entry can be a directory or a worktree/submodule pointer file.

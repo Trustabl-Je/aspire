@@ -189,6 +189,13 @@
   <data name="Skip" xml:space="preserve">
     <value>Skip</value>
   </data>
+  <data name="InvalidTemplateHostConfiguration" xml:space="preserve">
+    <value>Could not load template host configuration '{0}': {1}</value>
+    <comment>{0} is the host configuration path; {1} is the validation error.</comment>
+  </data>
+  <data name="InvalidTemplateHostConfigurationFormat" xml:space="preserve">
+    <value>Expected a JSON object with an optional 'symbolInfo' object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</value>
+  </data>
   <data name="Unknown" xml:space="preserve">
     <value>Unknown</value>
   </data>

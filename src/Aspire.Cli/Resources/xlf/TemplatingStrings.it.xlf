@@ -92,6 +92,16 @@
         <target state="translated">Test di integrazione</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidTemplateHostConfiguration">
+        <source>Could not load template host configuration '{0}': {1}</source>
+        <target state="new">Could not load template host configuration '{0}': {1}</target>
+        <note>{0} is the host configuration path; {1} is the validation error.</note>
+      </trans-unit>
+      <trans-unit id="InvalidTemplateHostConfigurationFormat">
+        <source>Expected a JSON object with an optional 'symbolInfo' object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</source>
+        <target state="new">Expected a JSON object with an optional 'symbolInfo' object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="No">
         <source>No</source>
         <target state="translated">No</target>

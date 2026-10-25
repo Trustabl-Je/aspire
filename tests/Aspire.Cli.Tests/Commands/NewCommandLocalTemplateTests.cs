@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands;
@@ -23,7 +24,7 @@ using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli.Tests.Commands;
 
-public class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper)
+public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData(true)]
@@ -519,7 +520,12 @@ public class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateTemplateAsync(workspace, "template");
         var interaction = new TestInteractionService();
-        using var provider = CreateServices(workspace, interaction, interactive: false).BuildServiceProvider();
+        var services = CreateServices(workspace, interaction, interactive: false);
+        services.AddSingleton<IPackagingService>(new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Templates without AspireVersion or AspireNuGetSource must not resolve package channels.")
+        });
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var exitCode = await command.Parse("new --template-path template --name Demo --output out --suppress-agent-init").InvokeAsync().DefaultTimeout();
@@ -613,14 +619,12 @@ public class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper)
         const string packageVersion = "17.0.0-pr.12345.gabcdef12";
         var interaction = new TestInteractionService();
         var services = CreateServices(workspace, interaction, interactive);
-        services.AddSingleton<IPackagingService>(new TestPackagingService
-        {
-            GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Templates without AspireNuGetSource must not resolve package channels.")
-        });
-        services.AddSingleton(workspace.CreateExecutionContext(
+        var context = workspace.CreateExecutionContext(
             identityChannel: "pr-12345",
             identityVersion: $"{packageVersion}+abcdef123456",
-            identityOverridden: true));
+            identityOverridden: true);
+        context.HivesDirectory.CreateSubdirectory("pr-12345/packages");
+        services.AddSingleton(context);
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
@@ -675,6 +679,316 @@ public class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper)
                 .Replace('\\', '/')
                 .Replace(PathNormalizer.NormalizePathForStorage(workspace.WorkspaceRoot.FullName), "{workspace}"))
             .UseParameters(channel, interactive, parameterName == "AspireNuGetSource" ? "canonical" : "mixed-case");
+    }
+
+    [Theory]
+    [InlineData("stable", "17.0.0", true)]
+    [InlineData("stable", "17.0.0-preview.1", false)]
+    [InlineData("daily", "17.0.0-preview.1.12345.1", true)]
+    [InlineData("staging", "17.0.0", false)]
+    [InlineData("pr-12345", "17.0.0-pr.12345.gabcdef12", false)]
+    [InlineData("local", "17.0.0-dev", true)]
+    public async Task LocalTemplate_ConfiguresMissingNuGetConfigForIdentity(string channel, string version, bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateVersionedTemplateAsync(workspace);
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, interaction, interactive);
+        const string commit = "abcdef1234567890abcdef1234567890abcdef1234";
+        var context = workspace.CreateExecutionContext(
+            identityChannel: channel, identityVersion: version, identityCommit: commit);
+        if (channel is "local" or "pr-12345")
+        {
+            context.HivesDirectory.CreateSubdirectory($"{channel}/packages");
+        }
+        services.AddSingleton(context);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Empty(interaction.StringPromptCalls);
+        Assert.Empty(interaction.BooleanPromptCalls);
+        var outputPath = Path.Combine(workspace.Path, "out");
+        var expectedSource = channel switch
+        {
+            "stable" => PackageSources.NuGetOrg,
+            "daily" => "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json",
+            "staging" => "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            _ => Path.Combine(context.HivesDirectory.FullName, channel, "packages")
+        };
+        Assert.Equal([expectedSource], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.AppHost.Sdk"), PackageSourceIdentity.Comparer);
+        Assert.Equal([expectedSource], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting.Redis"), PackageSourceIdentity.Comparer);
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Other.Dependency"));
+        await Verify(ReadOutput(workspace))
+            .AddScrubber(builder => builder.Replace('\\', '/').Replace(workspace.Path.Replace('\\', '/'), "{workspace}"))
+            .ScrubLinesWithReplace(line => Regex.Replace(line, "aspire-apphost-[a-f0-9]{16}", "aspire-apphost-source"))
+            .UseParameters(channel, version);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task LocalTemplate_CreatesMissingNuGetConfigForStableSourceOverrides(bool localPackagesOverride)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateVersionedTemplateAsync(workspace);
+        var packages = workspace.CreateDirectory("packages & assets");
+        const string sourceOverride = "https://nuget.example/v3/index.json";
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, interaction, interactive: false);
+        services.AddSingleton(TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: "stable",
+            identityVersion: "17.0.0",
+            identityPackagesDirectory: localPackagesOverride ? packages : null,
+            nugetServiceIndexOverride: sourceOverride));
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interaction.DisplayedErrors);
+        var outputPath = Path.Combine(workspace.Path, "out");
+        Assert.Equal(
+            [localPackagesOverride ? packages.FullName : sourceOverride],
+            NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"), PackageSourceIdentity.Comparer);
+        await Verify(ReadOutput(workspace))
+            .AddScrubber(builder => builder.Replace('\\', '/').Replace(workspace.Path.Replace('\\', '/'), "{workspace}"))
+            .ScrubLinesWithReplace(line => Regex.Replace(line, "aspire-apphost-[a-f0-9]{16}", "aspire-apphost-source"))
+            .UseParameters(localPackagesOverride);
+    }
+
+    [Theory]
+    [InlineData("stable", "nuget.config")]
+    [InlineData("daily", "NuGet.Config")]
+    [InlineData("staging", "NuGet.config")]
+    [InlineData("pr-12345", "nuget.config")]
+    public async Task LocalTemplate_PreservesEnterpriseNuGetConfigAndRouting(string channel, string fileName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateNuGetSourceTemplateAsync(workspace);
+        var templateConfigPath = Path.Combine(workspace.Path, "template", "nuget.config");
+        var targetConfigPath = Path.Combine(workspace.Path, "template", fileName);
+        if (fileName != "nuget.config")
+        {
+            File.Delete(templateConfigPath);
+        }
+        const string enterpriseSource = "https://enterprise.example/v3/index.json";
+        string[] enterprisePackages =
+        [
+            "Aspire.Hosting.Enterprise.Deployment",
+            "Aspire.Provisioning.Enterprise.Deployment",
+            "Aspire.Hosting.Enterprise.Defaults",
+            "Azure.Provisioning.Enterprise.Defaults",
+            "Aspire.Hosting.Azure.EnterpriseGateway"
+        ];
+        await File.WriteAllTextAsync(targetConfigPath, """
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="template-nuget" value="https://api.nuget.org/v3/index.json" />
+                <!--#if (separateAspireSource) -->
+                <add key="template-aspire" value="AspireNuGetSourceValue" />
+                <!--#endif -->
+                <add key="enterprise" value="https://enterprise.example/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="template-nuget">
+                  <package pattern="*" />
+                </packageSource>
+                <!--#if (separateAspireSource) -->
+                <packageSource key="template-aspire">
+                  <package pattern="Aspire*" />
+                </packageSource>
+                <!--#endif -->
+                <packageSource key="enterprise">
+                  <package pattern="Aspire.Hosting.Enterprise.Deployment" />
+                  <package pattern="Aspire.Provisioning.Enterprise.Deployment" />
+                  <package pattern="Aspire.Hosting.Enterprise.Defaults" />
+                  <package pattern="Azure.Provisioning.Enterprise.Defaults" />
+                  <package pattern="Aspire.Hosting.Azure.EnterpriseGateway" />
+                </packageSource>
+              </packageSourceMapping>
+              <config>
+                <add key="globalPackagesFolder" value=".enterprise-packages" />
+              </config>
+            </configuration>
+            """);
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, interaction, interactive: false);
+        var context = workspace.CreateExecutionContext(
+            identityChannel: channel, identityVersion: "17.0.0",
+            identityCommit: "abcdef1234567890abcdef1234567890abcdef1234");
+        if (channel is "pr-12345")
+        {
+            context.HivesDirectory.CreateSubdirectory($"{channel}/packages");
+        }
+        services.AddSingleton(context);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interaction.DisplayedErrors);
+        var outputPath = Path.Combine(workspace.Path, "out");
+        foreach (var package in enterprisePackages)
+        {
+            Assert.Equal([enterpriseSource], NuGetTestHelper.GetEligiblePackageSources(outputPath, package));
+        }
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Other.Dependency"));
+        var expectedSource = channel switch
+        {
+            "stable" => PackageSources.NuGetOrg,
+            "daily" => "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json",
+            "staging" => "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            _ => Path.Combine(context.HivesDirectory.FullName, channel, "packages")
+        };
+        Assert.Equal([expectedSource], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting.Redis"), PackageSourceIdentity.Comparer);
+        await Verify(ReadOutput(workspace))
+            .AddScrubber(builder => builder.Replace('\\', '/').Replace(workspace.Path.Replace('\\', '/'), "{workspace}"))
+            .UseParameters(channel, fileName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RepositoryTemplate_ConfiguresOnlyGeneratedNuGetConfig(bool templateOwnsConfig)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateVersionedTemplateAsync(workspace);
+        const string ownedConfig = "<configuration><!-- Enterprise-owned routing --></configuration>";
+        var sourceConfigPath = Path.Combine(workspace.Path, "template", "nuget.config");
+        if (templateOwnsConfig)
+        {
+            await File.WriteAllTextAsync(sourceConfigPath, ownedConfig);
+        }
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, interaction, interactive: false);
+        services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "daily", identityVersion: "17.0.0-preview.1"));
+        var gitRunner = new TestGitRunner
+        {
+            CloneAsyncCallback = (_, destination, _, _) =>
+            {
+                destination.CreateSubdirectory(".git");
+                foreach (var file in Directory.EnumerateFiles(Path.Combine(workspace.Path, "template"), "*", SearchOption.AllDirectories))
+                {
+                    var target = Path.Combine(destination.FullName, Path.GetRelativePath(Path.Combine(workspace.Path, "template"), file));
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.Copy(file, target);
+                }
+                return Task.CompletedTask;
+            }
+        };
+        services.AddSingleton<IGitRunner>(gitRunner);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-repository https://example.test/templates.git --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Single(gitRunner.CloneCalls);
+        if (templateOwnsConfig)
+        {
+            Assert.Equal(ownedConfig, await File.ReadAllTextAsync(sourceConfigPath));
+            Assert.Equal(ownedConfig, await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "nuget.config")));
+        }
+        else
+        {
+            Assert.Equal([".template.config/template.json", "aspire.config.json"],
+                ReadOutput(Path.Combine(workspace.Path, "template")).Keys);
+        }
+        // The acquisition directory is atomically moved into the retained cache after cloning.
+        var cachedTemplate = Assert.Single(Directory.GetDirectories(Path.Combine(workspace.Path, ".aspire", "cache", "git")));
+        Assert.Equal(
+            ReadOutput(Path.Combine(workspace.Path, "template")),
+            ReadOutput(Path.Combine(cachedTemplate, "repository")));
+        await Verify(ReadOutput(workspace))
+            .ScrubLinesWithReplace(line => Regex.Replace(line, "aspire-apphost-[a-f0-9]{16}", "aspire-apphost-source"))
+            .UseParameters(templateOwnsConfig);
+    }
+
+    [Fact]
+    public async Task LocalTemplate_MissingVersionChannelFailsBeforeWriting()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateVersionedTemplateAsync(workspace);
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, interaction, interactive: false);
+        services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "pr-missing"));
+        services.AddSingleton<IPackagingService>(new TestPackagingService());
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, NewCommandStrings.NoChannelFoundMatching, "pr-missing", "default"),
+            Assert.Single(interaction.DisplayedErrors));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LocalTemplate_FailsWhenRequiredNuGetConfigCannotBeCreated(bool credentialBearingSource)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateVersionedTemplateAsync(workspace);
+        if (!credentialBearingSource)
+        {
+            var conflictingDirectory = workspace.CreateDirectory("template/nuget.config");
+            await File.WriteAllTextAsync(Path.Combine(conflictingDirectory.FullName, "keep.txt"), "Template content");
+        }
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, interaction, interactive: false);
+        services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "daily", identityVersion: "17.0.0-preview.1"));
+        if (credentialBearingSource)
+        {
+            services.AddSingleton<IPackagingService>(new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                [
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease,
+                        [new PackageMapping("Aspire*", "https://user:password@nuget.example/v3/index.json")],
+                        new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance)
+                ])
+            });
+        }
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
+        Assert.Single(interaction.DisplayedErrors);
+        Assert.Empty(interaction.DisplayedSuccess);
+        Assert.False(File.Exists(Path.Combine(workspace.Path, "out", "nuget.config")));
+        if (credentialBearingSource)
+        {
+            Assert.Equal(
+                string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed,
+                    NewCommandStrings.SourceWithCredentialsCannotBePersisted),
+                Assert.Single(interaction.DisplayedErrors));
+        }
+        else
+        {
+            Assert.Equal("Template content", await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "nuget.config", "keep.txt")));
+        }
     }
 
     [Theory]
@@ -1539,6 +1853,10 @@ public class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper)
                   "valueSource": "{{parameterName}}",
                   "valueTransform": "xmlEncode",
                   "replaces": "AspireNuGetSourceValue"
+                },
+                "separateAspireSource": {
+                  "type": "computed",
+                  "value": "({{parameterName}} != \"https://api.nuget.org/v3/index.json\")"
                 }
               }
             }
@@ -1569,6 +1887,7 @@ public class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper)
                 ? TestHelpers.CreateInteractiveHostEnvironment()
                 : TestHelpers.CreateNonInteractiveHostEnvironment();
             options.NewCommandPrompterFactory = _ => new NewCommandPrompter(interaction);
+            options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
             {
                 CheckAsyncCallback = _ => throw new InvalidOperationException("Local templates must not require the SDK.")
@@ -1582,6 +1901,36 @@ public class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper)
                 GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local templates must not query package feeds.")
             };
         });
+    }
+
+    private static async Task CreateVersionedTemplateAsync(TemporaryWorkspace workspace)
+    {
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "nuget.config"), """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="default" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping><clear /></packageSourceMapping>
+            </configuration>
+            """);
+        var config = workspace.CreateDirectory("template/.template.config");
+        await File.WriteAllTextAsync(Path.Combine(config.FullName, "template.json"), """
+            {
+              "identity": "Aspire.Local.Versioned",
+              "name": "Versioned template",
+              "shortName": "versioned",
+              "symbols": {
+                "AspireVersion": {
+                  "type": "parameter",
+                  "datatype": "string",
+                  "replaces": "AspireVersionValue"
+                }
+              }
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "template", "aspire.config.json"),
+            """{ "sdk": { "version": "AspireVersionValue" } }""");
     }
 
     private static Dictionary<string, string> ReadOutput(TemporaryWorkspace workspace) =>

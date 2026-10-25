@@ -1,0 +1,15 @@
+{
+  "symbolInfo": {
+    "Framework": { "displayName": "Target framework" },
+    "AspireVersion": { "isHidden": true },
+    "appHostHttpPort": { "isHidden": true },
+    "appHostHttpsPort": { "isHidden": true },
+    "appHostOtlpHttpPort": { "isHidden": true },
+    "appHostOtlpHttpsPort": { "isHidden": true },
+    "appHostResourceHttpPort": { "isHidden": true },
+    "appHostResourceHttpsPort": { "isHidden": true },
+    "skipRestore": { "isHidden": true },
+    "NoHttps": { "displayName": "Disable HTTPS" },
+    "LocalhostTld": { "displayName": "Use .dev.localhost URLs" }
+  }
+}

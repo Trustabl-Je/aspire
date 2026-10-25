@@ -223,6 +223,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Could not load template host configuration '{0}': {1}.
+        /// </summary>
+        internal static string InvalidTemplateHostConfiguration {
+            get {
+                return ResourceManager.GetString("InvalidTemplateHostConfiguration", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Expected a JSON object with an optional 'symbolInfo' object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string..
+        /// </summary>
+        internal static string InvalidTemplateHostConfigurationFormat {
+            get {
+                return ResourceManager.GetString("InvalidTemplateHostConfigurationFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to No.
         /// </summary>
         internal static string No {

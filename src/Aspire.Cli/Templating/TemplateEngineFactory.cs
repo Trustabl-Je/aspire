@@ -30,6 +30,7 @@ internal sealed class TemplateEngineFactory(
     ICliHostEnvironment hostEnvironment,
     IGitRunner gitRunner,
     IPackagingService packagingService,
+    TemplateNuGetConfigService templateNuGetConfigService,
     ILogger<TemplateEngineFactory> logger) : ITemplateFactory, IDisposable
 {
     private readonly List<IDisposable> _resources = [];
@@ -250,6 +251,7 @@ internal sealed class TemplateEngineFactory(
 
     private async Task<TemplateResult> ApplyAsync(IEngineEnvironmentSettings settings, TemplateCreator creator, ITemplateInfo template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
     {
+        var hostConfiguration = await TemplateHostConfiguration.LoadAsync(settings, template, cancellationToken);
         var name = inputs.Name is { } explicitName && ProjectNameValidator.IsProjectNameValid(explicitName)
             ? explicitName
             : await prompter.PromptForProjectNameAsync(
@@ -273,6 +275,8 @@ internal sealed class TemplateEngineFactory(
         }
 
         var parameters = new Dictionary<string, string?>(StringComparer.Ordinal);
+        PackageChannel? identityChannel = null;
+        PackageChannel? templateChannel = null;
         try
         {
             var promptState = hostEnvironment.SupportsInteractiveInput && template.ParameterDefinitions.Any(parameter =>
@@ -294,38 +298,36 @@ internal sealed class TemplateEngineFactory(
                 }
 
                 string? value;
-                if (parameter.Name.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase))
+                if (parameter.Name.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase) ||
+                    parameter.Name.Equals("AspireNuGetSource", StringComparison.OrdinalIgnoreCase))
                 {
-                    value = executionContext.IdentitySdkVersion;
-                }
-                else if (parameter.Name.Equals("AspireNuGetSource", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Resolve policy without querying feeds, using the same identity as AspireVersion.
-                    // PackagingService also handles PR hives and local package/source overrides.
-                    var channels = (await packagingService.GetChannelsAsync(cancellationToken, executionContext.IdentityChannel)).ToArray();
-                    var channel = channels.FirstOrDefault(channel =>
-                        string.Equals(channel.Name, executionContext.IdentityChannel, StringComparisons.ChannelName) &&
-                        channel.Mappings is { Length: > 0 });
-                    if (channel is null)
+                    identityChannel ??= await GetIdentityPackageChannelAsync(cancellationToken);
+                    if (identityChannel is null)
                     {
-                        interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
-                            NewCommandStrings.NoChannelFoundMatching,
-                            executionContext.IdentityChannel,
-                            string.Join(", ", channels.Select(channel => channel.Name))));
                         return new TemplateResult(CliExitCodes.InvalidCommand);
                     }
 
-                    value = channel.SourceDetails;
+                    if (parameter.Name.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = executionContext.IdentitySdkVersion;
+                        templateChannel = identityChannel;
+                    }
+                    else
+                    {
+                        value = identityChannel.SourceDetails;
+                    }
                 }
-                else if (!hostEnvironment.SupportsInteractiveInput)
+                else if (!hostEnvironment.SupportsInteractiveInput || hostConfiguration.IsHidden(parameter.Name))
                 {
-                    // Leave unset values to the engine, including conditional requirements and defaults.
+                    // Leave hidden values unset, not explicitly defaulted: coalesce symbols use
+                    // whether a value was supplied to choose generated fallbacks such as random ports.
                     continue;
                 }
                 else
                 {
                     value = await PromptForParameterAsync(
-                        parameter, promptState?.IsRequired(parameter) ?? parameter.Precedence.IsRequired, cancellationToken);
+                        parameter, promptState?.IsRequired(parameter) ?? parameter.Precedence.IsRequired,
+                        hostConfiguration.GetDisplayName(parameter.Name), cancellationToken);
                 }
 
                 if (value is null)
@@ -365,13 +367,38 @@ internal sealed class TemplateEngineFactory(
             return CreationFailed(result);
         }
 
+        if (templateChannel is not null)
+        {
+            await templateNuGetConfigService.CreateNuGetConfigIfMissingAsync(templateChannel, outputPath, cancellationToken);
+        }
+
         interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
         return new TemplateResult(CliExitCodes.Success, outputPath);
     }
 
-    private async Task<string?> PromptForParameterAsync(ITemplateParameter parameter, bool required, CancellationToken cancellationToken)
+    private async Task<PackageChannel?> GetIdentityPackageChannelAsync(CancellationToken cancellationToken)
     {
-        var prompt = (!string.IsNullOrWhiteSpace(parameter.DisplayName)
+        // Resolve metadata only, keeping version injection and generated feed policy on the same
+        // identity. PackagingService also handles PR hives and explicit local/source overrides.
+        var channels = (await packagingService.GetChannelsAsync(cancellationToken, executionContext.IdentityChannel)).ToArray();
+        var channel = channels.FirstOrDefault(channel =>
+            string.Equals(channel.Name, executionContext.IdentityChannel, StringComparisons.ChannelName) &&
+            channel.Mappings is { Length: > 0 });
+        if (channel is null)
+        {
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
+                NewCommandStrings.NoChannelFoundMatching,
+                executionContext.IdentityChannel,
+                string.Join(", ", channels.Select(channel => channel.Name))));
+        }
+
+        return channel;
+    }
+
+    private async Task<string?> PromptForParameterAsync(ITemplateParameter parameter, bool required, string? displayName, CancellationToken cancellationToken)
+    {
+        var prompt = (!string.IsNullOrWhiteSpace(displayName) ? displayName
+            : !string.IsNullOrWhiteSpace(parameter.DisplayName)
             ? parameter.DisplayName
             : !string.IsNullOrWhiteSpace(parameter.Description) ? parameter.Description : parameter.Name).EscapeMarkup();
         if (parameter.DataType.Equals("bool", StringComparison.OrdinalIgnoreCase))

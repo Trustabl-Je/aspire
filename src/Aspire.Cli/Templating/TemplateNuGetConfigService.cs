@@ -32,6 +32,30 @@ internal sealed class TemplateNuGetConfigService(
     /// </summary>
     public const string TemplatesPackageName = "Aspire.ProjectTemplates";
 
+    public async Task CreateNuGetConfigIfMissingAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var outputDirectory = new DirectoryInfo(outputPath);
+        // Templates can own private-package routing, including exact Aspire.Hosting.* mappings
+        // that override the CLI's broader Aspire* feed. Never merge over their generated config.
+        if (outputDirectory.Exists &&
+            DotNetAppHostNuGetConfigMerger.TryFindNuGetConfigInDirectory(outputDirectory, out _))
+        {
+            return;
+        }
+
+        if (channel.ShouldCreateNuGetConfig())
+        {
+            if (channel.Mappings is { } mappings &&
+                mappings.Any(static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)))
+            {
+                throw new ArgumentException(Resources.NewCommandStrings.SourceWithCredentialsCannotBePersisted);
+            }
+
+            await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride: null, outputDirectory, cancellationToken);
+        }
+    }
+
     /// <summary>
     /// Creates initial template NuGet configuration when the selected channel requires it.
     /// </summary>

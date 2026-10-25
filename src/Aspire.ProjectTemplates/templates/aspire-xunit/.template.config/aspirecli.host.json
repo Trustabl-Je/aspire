@@ -1,0 +1,7 @@
+{
+  "symbolInfo": {
+    "Framework": { "displayName": "Target framework" },
+    "XUnitVersion": { "displayName": "xUnit.net version" },
+    "skipRestore": { "isHidden": true }
+  }
+}
