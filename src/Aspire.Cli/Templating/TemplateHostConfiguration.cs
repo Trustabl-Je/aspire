@@ -13,6 +13,18 @@ internal sealed class TemplateHostConfiguration
 {
     private readonly Dictionary<string, SymbolInfo> _symbols = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Gets whether this template opts into creating a missing output-root NuGet configuration
+    /// when the CLI identity's package sources require one. Defaults to false.
+    /// </summary>
+    /// <remarks>
+    /// This is an Aspire host setting, not a template parameter or a language inference.
+    /// Version substitution alone does not request NuGet policy: polyglot AppHosts can use
+    /// the CLI SDK version while their integration restore manages package sources separately.
+    /// An opt-in never permits overwriting a template-owned configuration.
+    /// </remarks>
+    public bool CreateNuGetConfig { get; private set; }
+
     public bool IsHidden(string name) => _symbols.TryGetValue(name, out var symbol) && symbol.IsHidden;
 
     public string? GetDisplayName(string name) => _symbols.TryGetValue(name, out var symbol) ? symbol.DisplayName : null;
@@ -49,6 +61,19 @@ internal sealed class TemplateHostConfiguration
                 if (root.ValueKind != JsonValueKind.Object)
                 {
                     throw new JsonException(TemplatingStrings.InvalidTemplateHostConfigurationFormat);
+                }
+                // Template-level settings share the selected host file with prompt metadata:
+                //   {"createNuGetConfig":true,"symbolInfo":{"AspireVersion":{"isHidden":true}}}
+                // Read the opt-in even when symbolInfo is absent. Only JSON Booleans are valid;
+                // an omitted setting remains false, including in an authoritative empty host file.
+                if (root.TryGetProperty("createNuGetConfig", out var createNuGetConfig))
+                {
+                    configuration.CreateNuGetConfig = createNuGetConfig.ValueKind switch
+                    {
+                        JsonValueKind.True => true,
+                        JsonValueKind.False => false,
+                        _ => throw new JsonException(TemplatingStrings.InvalidTemplateHostConfigurationFormat)
+                    };
                 }
                 if (!root.TryGetProperty("symbolInfo", out var symbols))
                 {

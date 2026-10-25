@@ -194,7 +194,7 @@
     <comment>{0} is the host configuration path; {1} is the validation error.</comment>
   </data>
   <data name="InvalidTemplateHostConfigurationFormat" xml:space="preserve">
-    <value>Expected a JSON object with an optional 'symbolInfo' object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</value>
+    <value>Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</value>
   </data>
   <data name="Unknown" xml:space="preserve">
     <value>Unknown</value>

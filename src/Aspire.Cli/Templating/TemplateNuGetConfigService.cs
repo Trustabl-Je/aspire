@@ -32,6 +32,14 @@ internal sealed class TemplateNuGetConfigService(
     /// </summary>
     public const string TemplatesPackageName = "Aspire.ProjectTemplates";
 
+    /// <summary>
+    /// Applies explicitly requested template NuGet policy without overwriting template-owned configuration.
+    /// </summary>
+    /// <remarks>
+    /// The template engine calls this only after a createNuGetConfig host opt-in. The opt-in
+    /// requests channel policy, not unconditional file creation: nuget.org-only sources still
+    /// use ambient configuration, while custom sources can require a new output-root file.
+    /// </remarks>
     public async Task CreateNuGetConfigIfMissingAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

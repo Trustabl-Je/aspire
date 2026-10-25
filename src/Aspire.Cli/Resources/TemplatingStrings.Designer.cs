@@ -232,7 +232,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Expected a JSON object with an optional 'symbolInfo' object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string..
+        ///   Looks up a localized string similar to Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string..
         /// </summary>
         internal static string InvalidTemplateHostConfigurationFormat {
             get {

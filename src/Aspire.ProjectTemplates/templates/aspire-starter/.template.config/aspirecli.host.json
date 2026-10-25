@@ -1,6 +1,7 @@
 {
+  "createNuGetConfig": true,
   "symbolInfo": {
-    "Framework": { "displayName": "Target framework" },
+    "Framework": { "isHidden": true },
     "UseRedisCache": { "displayName": "Use Redis for caching" },
     "TestFx": { "displayName": "Test framework" },
     "XUnitVersion": { "displayName": "xUnit.net version" },
@@ -15,7 +16,7 @@
     "apiServiceHttpPort": { "isHidden": true },
     "apiServiceHttpsPort": { "isHidden": true },
     "skipRestore": { "isHidden": true },
-    "NoHttps": { "displayName": "Disable HTTPS" },
+    "NoHttps": { "isHidden": true },
     "LocalhostTld": { "displayName": "Use .dev.localhost URLs" }
   }
 }

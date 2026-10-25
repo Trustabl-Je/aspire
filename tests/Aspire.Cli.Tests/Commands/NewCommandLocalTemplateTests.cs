@@ -906,7 +906,7 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
         }
         else
         {
-            Assert.Equal([".template.config/template.json", "aspire.config.json"],
+            Assert.Equal([".template.config/aspirecli.host.json", ".template.config/template.json", "aspire.config.json"],
                 ReadOutput(Path.Combine(workspace.Path, "template")).Keys);
         }
         // The acquisition directory is atomically moved into the retained cache after cloning.
@@ -920,7 +920,7 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
     }
 
     [Fact]
-    public async Task LocalTemplate_MissingVersionChannelFailsBeforeWriting()
+    public async Task LocalTemplate_NuGetConfigOptInWithMissingChannelFailsBeforeWriting()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateVersionedTemplateAsync(workspace);
@@ -1031,6 +1031,7 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateNuGetSourceTemplateAsync(workspace);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "template", ".template.config", "aspirecli.host.json"), "{}");
         var interaction = new TestInteractionService();
         var services = CreateServices(workspace, interaction, interactive: false);
         services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "pr-missing"));
@@ -1831,6 +1832,8 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
     private static async Task CreateNuGetSourceTemplateAsync(TemporaryWorkspace workspace, string parameterName = "AspireNuGetSource")
     {
         var config = workspace.CreateDirectory("template/.template.config");
+        await File.WriteAllTextAsync(Path.Combine(config.FullName, "aspirecli.host.json"),
+            """{ "createNuGetConfig": true }""");
         await File.WriteAllTextAsync(Path.Combine(config.FullName, "template.json"), $$"""
             {
               "identity": "Aspire.Local.NuGetSource",
@@ -1915,6 +1918,8 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
             </configuration>
             """);
         var config = workspace.CreateDirectory("template/.template.config");
+        await File.WriteAllTextAsync(Path.Combine(config.FullName, "aspirecli.host.json"),
+            """{ "createNuGetConfig": true }""");
         await File.WriteAllTextAsync(Path.Combine(config.FullName, "template.json"), """
             {
               "identity": "Aspire.Local.Versioned",

@@ -3,8 +3,10 @@
 
 using System.Globalization;
 using System.Text.Json;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -208,6 +210,11 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "symbolInfo": { "Greeting": { "isHidden": 1 } } }""")]
     [InlineData("""{ "symbolInfo": { "Greeting": { "isHidden": "yes" } } }""")]
     [InlineData("""{ "symbolInfo": { "Greeting": { "displayName": false } } }""")]
+    [InlineData("""{ "createNuGetConfig": "true" }""")]
+    [InlineData("""{ "createNuGetConfig": null }""")]
+    [InlineData("""{ "createNuGetConfig": 1 }""")]
+    [InlineData("""{ "createNuGetConfig": [] }""")]
+    [InlineData("""{ "createNuGetConfig": {} }""")]
     public async Task LocalTemplate_InvalidSelectedHostConfigurationDoesNotFallBack(string contents)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -278,18 +285,104 @@ public partial class NewCommandLocalTemplateTests
         await Verify(ReadOutput(workspace));
     }
 
+    [Theory]
+    [InlineData("absent")]
+    [InlineData("empty")]
+    [InlineData("false")]
+    public async Task LocalTemplate_PolyglotVersionDoesNotRequestNuGetPolicy(string hostConfiguration)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateVersionedTemplateAsync(workspace);
+        var hostFile = Path.Combine(workspace.Path, "template", ".template.config", "aspirecli.host.json");
+        if (hostConfiguration == "absent")
+        {
+            File.Delete(hostFile);
+        }
+        else
+        {
+            await File.WriteAllTextAsync(hostFile,
+                hostConfiguration == "empty" ? "{}" : """{ "createNuGetConfig": false }""");
+        }
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "template", "aspire.config.json"), """
+            {
+              "appHost": { "path": "apphost.mts", "language": "typescript/nodejs" },
+              "sdk": { "version": "AspireVersionValue" },
+              "packages": { "Aspire.Hosting.JavaScript": "AspireVersionValue" }
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "template", "apphost.mts"),
+            """import { createBuilder } from "./.aspire/sdk/aspire.js";""");
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, interaction, interactive: false);
+        services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "pr-missing", identityVersion: "17.0.0-pr.12345"));
+        services.AddSingleton<IPackagingService>(new TestPackagingService());
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interaction.DisplayedErrors);
+        await Verify(ReadOutput(workspace)).UseParameters(hostConfiguration);
+    }
+
+    [Theory]
+    [InlineData(null, true, true)]
+    [InlineData("{}", true, false)]
+    [InlineData("""{ "createNuGetConfig": false }""", true, false)]
+    [InlineData("""{ "createNuGetConfig": true }""", false, true)]
+    public async Task LocalTemplate_NuGetConfigOptInUsesOneHostFileWithoutRequiringVersionParameter(
+        string? aspireConfiguration, bool dotnetOptIn, bool expectedCreate)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await CreateVersionedTemplateAsync(workspace);
+        var config = Path.Combine(workspace.Path, "template", ".template.config");
+        await File.WriteAllTextAsync(Path.Combine(config, "template.json"), """
+            {
+              "identity": "Aspire.Local.NuGetOptIn",
+              "name": "NuGet opt-in template",
+              "shortName": "nuget-opt-in"
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "template", "aspire.config.json"), "{}");
+        var hostFile = Path.Combine(config, "aspirecli.host.json");
+        if (aspireConfiguration is null)
+        {
+            File.Delete(hostFile);
+        }
+        else
+        {
+            await File.WriteAllTextAsync(hostFile, aspireConfiguration);
+        }
+        await File.WriteAllTextAsync(Path.Combine(config, "dotnetcli.host.json"),
+            JsonSerializer.Serialize(new { createNuGetConfig = dotnetOptIn }));
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace, interaction, interactive: false);
+        services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "daily", identityVersion: "17.0.0-preview.1"));
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interaction.DisplayedErrors);
+        var output = Path.Combine(workspace.Path, "out");
+        Assert.Equal(expectedCreate, File.Exists(Path.Combine(output, "nuget.config")));
+        Assert.Equal(
+            expectedCreate ? "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" : "https://api.nuget.org/v3/index.json",
+            Assert.Single(NuGetTestHelper.GetEligiblePackageSources(output, "Aspire.Hosting.Redis")));
+    }
+
     public static TheoryData<string, string, string[], string[]> BuiltInTemplatePrompts => new()
     {
-        { "aspire-apphost", "None", ["Target framework"], ["Disable HTTPS", "Use .dev.localhost URLs"] },
-        { "aspire-apphost-singlefile", "None", ["Target framework"], ["Disable HTTPS", "Use .dev.localhost URLs"] },
-        { "aspire-empty", "None", ["Target framework"], ["Disable HTTPS", "Use .dev.localhost URLs"] },
-        { "aspire-mstest", "None", ["Target framework"], [] },
-        { "aspire-nunit", "None", ["Target framework"], [] },
-        { "aspire-servicedefaults", "None", ["Target framework"], [] },
-        { "aspire-starter", "None", ["Target framework", "Test framework"], ["Use Redis for caching", "Disable HTTPS", "Use .dev.localhost URLs"] },
-        { "aspire-starter", "xUnit.net", ["Target framework", "Test framework", "xUnit.net version"], ["Use Redis for caching", "Disable HTTPS", "Use .dev.localhost URLs"] },
-        { "aspire-ts-cs-starter", "None", ["Target framework"], ["Use Redis for caching", "Disable HTTPS", "Use .dev.localhost URLs"] },
-        { "aspire-xunit", "None", ["Target framework", "xUnit.net version"], [] }
+        { "aspire-apphost", "None", [], [] },
+        { "aspire-apphost-singlefile", "None", [], ["Use .dev.localhost URLs"] },
+        { "aspire-empty", "None", [], [] },
+        { "aspire-starter", "None", ["Test framework"], ["Use Redis for caching", "Use .dev.localhost URLs"] },
+        { "aspire-starter", "xUnit.net", ["Test framework", "xUnit.net version"], ["Use Redis for caching", "Use .dev.localhost URLs"] },
+        { "aspire-ts-cs-starter", "None", [], ["Use Redis for caching", "Use .dev.localhost URLs"] }
     };
 
     [Theory]
@@ -300,10 +393,18 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var source = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
             "..", "..", "..", "..", "..", "src", "Aspire.ProjectTemplates", "templates", templateName));
+        var template = workspace.CreateDirectory("template");
+        FileSystemHelper.CopyDirectory(source, template.FullName);
+        var configurationPath = Path.Combine(template.FullName, ".template.config", "template.json");
+        // Materialize build-time version metadata in the fixture, as template packaging does.
+        await File.WriteAllTextAsync(configurationPath,
+            (await File.ReadAllTextAsync(configurationPath))
+                .Replace("!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!", "17.0.0", StringComparison.Ordinal));
         var interaction = new TestInteractionService();
-        interaction.SetupBooleanResponse(false);
-        interaction.SetupBooleanResponse(false);
-        interaction.SetupBooleanResponse(false);
+        foreach (var _ in expectedBooleans)
+        {
+            interaction.SetupBooleanResponse(false);
+        }
         var choicePrompts = new List<string>();
         interaction.PromptForSelectionCallback = (prompt, choices, _, _) =>
         {
@@ -315,7 +416,7 @@ public partial class NewCommandLocalTemplateTests
         using var provider = services.BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse($"new --template-path \"{source}\" --name Demo --output out --suppress-agent-init")
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
             .InvokeAsync().DefaultTimeout();
 
         Assert.True(exitCode == CliExitCodes.Success, string.Join(Environment.NewLine, interaction.DisplayedErrors));
@@ -337,7 +438,9 @@ public partial class NewCommandLocalTemplateTests
         {
             using var document = JsonDocument.Parse(await File.ReadAllTextAsync(path),
                 new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
-            foreach (var profile in document.RootElement.GetProperty("profiles").EnumerateObject())
+            var launchProfiles = document.RootElement.GetProperty("profiles");
+            Assert.Equal(["http", "https"], launchProfiles.EnumerateObject().Select(profile => profile.Name).Order(StringComparer.Ordinal));
+            foreach (var profile in launchProfiles.EnumerateObject())
             {
                 foreach (var url in profile.Value.GetProperty("applicationUrl").GetString()!.Split(';'))
                 {

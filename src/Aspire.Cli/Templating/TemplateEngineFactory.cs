@@ -277,6 +277,19 @@ internal sealed class TemplateEngineFactory(
         var parameters = new Dictionary<string, string?>(StringComparer.Ordinal);
         PackageChannel? identityChannel = null;
         PackageChannel? templateChannel = null;
+        // Root NuGet policy is explicitly requested by the selected host file, independently
+        // of language tags and AspireVersion. A polyglot template can pin its SDK version
+        // without needing a root config; a template with .NET consumers can opt in.
+        // Resolve required policy before generation so an unavailable channel cannot leave files.
+        if (hostConfiguration.CreateNuGetConfig)
+        {
+            templateChannel = await GetIdentityPackageChannelAsync(cancellationToken);
+            if (templateChannel is null)
+            {
+                return new TemplateResult(CliExitCodes.InvalidCommand);
+            }
+            identityChannel = templateChannel;
+        }
         try
         {
             var promptState = hostEnvironment.SupportsInteractiveInput && template.ParameterDefinitions.Any(parameter =>
@@ -298,8 +311,11 @@ internal sealed class TemplateEngineFactory(
                 }
 
                 string? value;
-                if (parameter.Name.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase) ||
-                    parameter.Name.Equals("AspireNuGetSource", StringComparison.OrdinalIgnoreCase))
+                if (parameter.Name.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase))
+                {
+                    value = executionContext.IdentitySdkVersion;
+                }
+                else if (parameter.Name.Equals("AspireNuGetSource", StringComparison.OrdinalIgnoreCase))
                 {
                     identityChannel ??= await GetIdentityPackageChannelAsync(cancellationToken);
                     if (identityChannel is null)
@@ -307,15 +323,7 @@ internal sealed class TemplateEngineFactory(
                         return new TemplateResult(CliExitCodes.InvalidCommand);
                     }
 
-                    if (parameter.Name.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase))
-                    {
-                        value = executionContext.IdentitySdkVersion;
-                        templateChannel = identityChannel;
-                    }
-                    else
-                    {
-                        value = identityChannel.SourceDetails;
-                    }
+                    value = identityChannel.SourceDetails;
                 }
                 else if (!hostEnvironment.SupportsInteractiveInput || hostConfiguration.IsHidden(parameter.Name))
                 {
@@ -378,8 +386,9 @@ internal sealed class TemplateEngineFactory(
 
     private async Task<PackageChannel?> GetIdentityPackageChannelAsync(CancellationToken cancellationToken)
     {
-        // Resolve metadata only, keeping version injection and generated feed policy on the same
-        // identity. PackagingService also handles PR hives and explicit local/source overrides.
+        // Resolve source projection and explicitly requested NuGet policy against the same CLI
+        // identity used for version injection, without querying feeds. PackagingService also
+        // handles PR hives and explicit local/source overrides.
         var channels = (await packagingService.GetChannelsAsync(cancellationToken, executionContext.IdentityChannel)).ToArray();
         var channel = channels.FirstOrDefault(channel =>
             string.Equals(channel.Name, executionContext.IdentityChannel, StringComparisons.ChannelName) &&

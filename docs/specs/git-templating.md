@@ -207,7 +207,7 @@ a shared bare-object pool or a cache manager for unrelated consumers.
 
 ## Template parameters and generation
 
-### Host-specific presentation
+### Host-specific configuration
 
 The engine host identifier is `aspirecli`, with `dotnetcli` as its fallback.
 For each template, host metadata is selected from its own `.template.config`
@@ -227,6 +227,7 @@ property, plus an optional `displayName` override for terminal prompt labels:
 
 ```json
 {
+  "createNuGetConfig": true,
   "symbolInfo": {
     "Framework": { "displayName": "Target framework" },
     "appHostHttpPort": { "isHidden": true },
@@ -235,6 +236,20 @@ property, plus an optional `displayName` override for terminal prompt labels:
   }
 }
 ```
+
+The Aspire-specific, template-level `createNuGetConfig` setting is an explicit
+opt-in to missing-root NuGet configuration generation. It accepts only a JSON
+Boolean and defaults to `false` when omitted. It is independent of `symbolInfo`
+and is also valid in a host file without that object. A `true` value requests
+the CLI's existing channel policy; it does not force a file when the resolved
+sources are only nuget.org, and never permits overwriting template-owned
+configuration. The same one-file precedence applies to this setting: an empty
+Aspire host file does not inherit an opt-in from the .NET CLI fallback.
+
+This setting expresses the template author's restore requirements, not its
+programming language. For example, a TypeScript-only AppHost can pin the CLI SDK
+version without needing a root NuGet configuration, while a TypeScript AppHost
+with .NET services can opt in. No language inference or output scanning is used.
 
 `isHidden` accepts JSON Booleans and the strings `"true"` and `"false"`, as
 allowed by the .NET CLI schema. Omitted entries and omitted `isHidden` properties
@@ -249,15 +264,27 @@ defaults still participate in interactive condition evaluation, and the engine
 still rejects missing required values. The well-known `AspireVersion` and
 `AspireNuGetSource` projections remain active even when marked hidden.
 
-The existing templates under `src/Aspire.ProjectTemplates/templates` include
-Aspire-specific host files. They retain framework, feature, test, HTTPS, and
-localhost-TLD choices where applicable, while hiding port overrides and restore
-controls. Prompt labels avoid IDE keyboard mnemonics. Because there is no merge,
-each of these host files includes its complete set of hiding rules.
+The AppHost, single-file AppHost, empty, starter, and TypeScript+C# starter
+templates under `src/Aspire.ProjectTemplates/templates` include Aspire-specific
+host files. They hide framework, HTTPS, port overrides, and restore controls,
+following the regular `aspire new` questionnaires. The starters retain Redis and
+localhost-TLD choices; the .NET starter also retains test-framework selection and
+the conditional xUnit version. The single-file template retains its localhost-TLD
+choice, while the AppHost and empty templates have no extra prompts. Prompt
+labels avoid IDE keyboard mnemonics. Because there is no merge, each host file
+includes its complete set of hiding rules. Standalone MSTest, NUnit, xUnit, and
+service-defaults templates do not include Aspire-specific host files.
+The five .NET templates opt into `createNuGetConfig` for their package restores.
 
 Host metadata changes the interactive questionnaire, not the generation model.
 The .NET CLI itself primarily exposes arguments and applies defaults; Aspire
 continues to prompt for ordinary visible parameters.
+
+Repository template sources can also contain build-time `!!REPLACE_...!!` tokens
+that are normally substituted while packaging. Host metadata does not resolve
+those tokens. To use a raw source directory or a copied Git template, first
+materialize those values or replace them with template symbols, such as the
+`AspireVersion` parameter described below.
 
 ### Prompting and engine execution
 
@@ -330,9 +357,9 @@ build metadata (`+...`). CLI identity overrides are honored.
 }
 ```
 
-Injecting this parameter also opts the template into automatic creation of a
-missing output-root `nuget.config`. A template that does not participate in this
-version projection does not automatically inherit the CLI's NuGet policy.
+Version injection does not opt the template into NuGet configuration generation
+or require a resolvable package channel. Set `createNuGetConfig` in the host file
+when the generated project's restores need the CLI's root NuGet policy.
 
 ### `AspireNuGetSource`
 
@@ -345,10 +372,12 @@ Typical values are nuget.org for stable, the appropriate daily or staging feed,
 and a local package directory for PR/local builds. Package-directory and NuGet
 service-index identity overrides are honored.
 
-Both well-known parameters resolve against the same identity channel, using
-`PackagingService.GetChannelsAsync` without querying package feeds. A missing
-matching channel or missing channel mappings causes an error before generation;
-the flow does not silently choose an unrelated channel.
+Source projection and opted-in NuGet policy resolve against the same CLI identity
+used for version injection, using `PackagingService.GetChannelsAsync` without
+querying package feeds. A missing matching channel or missing channel mappings
+causes an error before generation when source projection or policy was requested;
+version injection alone does not require channel resolution. The flow does not
+silently choose an unrelated channel.
 
 Templates own encoding the raw source value for their output format. For a
 double-quoted XML attribute, the engine's `xmlEncode` form must be combined with
@@ -393,8 +422,9 @@ There are two distinct ownership models:
 
 - **Template-owned:** the engine emits a root `nuget.config`; the CLI preserves
   the generated file instead of merging its own policy into it.
-- **CLI-created:** version projection opts in, no root config exists, and the
-  resolved policy requires custom sources; the CLI creates the missing file.
+- **CLI-created:** the selected host file sets `createNuGetConfig: true`, no root
+  config exists, and the resolved policy requires custom sources; the CLI creates
+  the missing file.
 
 The decision is based on actual resolved sources, not version suffixes or the
 channel name alone. `PackageChannel.ShouldCreateNuGetConfig()` checks whether
@@ -404,7 +434,8 @@ can have an explicit local-package or service-index override.
 
 ### Scenario matrix
 
-The automatic-creation rows assume the flow has injected `AspireVersion`.
+The automatic-creation rows assume the selected host file sets
+`createNuGetConfig: true`. This does not require an `AspireVersion` parameter.
 
 | Scenario | Missing output-root config | Existing template-generated output-root config |
 | --- | --- | --- |
@@ -414,8 +445,9 @@ The automatic-creation rows assume the flow has injected `AspireVersion`.
 | Staging feed, including stable-shaped versions | Create source policy and applicable channel package-cache settings | Preserve |
 | PR/local package directory | Create policy using the resolved directory | Preserve |
 | Stable identity with an explicit custom package source | Create policy for the override | Preserve |
-| No version projection | Do not automatically create a config | Preserve |
-| Required identity channel or mappings unavailable | Fail before generation | Fail before generation when well-known parameter injection requires that channel |
+| `createNuGetConfig` absent or false, even with `AspireVersion` | Do not automatically create a config | Preserve |
+| Opted in without an `AspireVersion` parameter | Apply the same channel-based creation policy | Preserve |
+| Required identity channel or mappings unavailable | Fail before generation | Fail before generation when source projection or policy requires that channel |
 | Required configuration cannot be written | Fail the command without reporting successful creation | No CLI rewrite is attempted |
 
 Existing root filenames are recognized case-insensitively, and preserved

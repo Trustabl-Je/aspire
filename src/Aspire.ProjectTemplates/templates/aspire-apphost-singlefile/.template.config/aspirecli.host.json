@@ -1,13 +1,14 @@
 {
+  "createNuGetConfig": true,
   "symbolInfo": {
-    "Framework": { "displayName": "Target framework" },
+    "Framework": { "isHidden": true },
     "appHostHttpPort": { "isHidden": true },
     "appHostHttpsPort": { "isHidden": true },
     "appHostOtlpHttpPort": { "isHidden": true },
     "appHostOtlpHttpsPort": { "isHidden": true },
     "appHostResourceHttpPort": { "isHidden": true },
     "appHostResourceHttpsPort": { "isHidden": true },
-    "NoHttps": { "displayName": "Disable HTTPS" },
+    "NoHttps": { "isHidden": true },
     "LocalhostTld": { "displayName": "Use .dev.localhost URLs" }
   }
 }
