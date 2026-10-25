@@ -10,10 +10,6 @@ internal sealed class GitCommandException(GitFailure failure, int? exitCode)
         GitFailure.AuthenticationFailed => Resources.ErrorStrings.GitAuthenticationFailed,
         GitFailure.RepositoryUnavailable => Resources.ErrorStrings.GitRepositoryUnavailable,
         GitFailure.TimedOut => Resources.ErrorStrings.GitTimedOut,
-        GitFailure.FileNotFound => Resources.ErrorStrings.GitFileNotFound,
-        GitFailure.FileNotRegular => Resources.ErrorStrings.GitFileNotRegular,
-        GitFailure.BlobTooLarge => Resources.ErrorStrings.GitBlobTooLarge,
-        GitFailure.InvalidOutput => Resources.ErrorStrings.GitInvalidOutput,
         _ => Resources.ErrorStrings.GitCommandFailed
     })
 {
@@ -31,9 +27,5 @@ internal enum GitFailure
     AuthenticationFailed,
     RepositoryUnavailable,
     CommandFailed,
-    TimedOut,
-    FileNotFound,
-    FileNotRegular,
-    BlobTooLarge,
-    InvalidOutput
+    TimedOut
 }

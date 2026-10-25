@@ -945,11 +945,11 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("stable", "https://api.nuget.org/v3/index.json", false)]
-    [InlineData("preview", "https://api.nuget.org/v3/index.json", false)]
-    [InlineData("stable", "https://enterprise.example/v3/index.json", true)]
-    [InlineData("stable", "/local/packages", true)]
+    [InlineData("preview", "https://api.nuget.org/v3/index.json", true)]
+    [InlineData("stable", "https://enterprise.example/v3/index.json", false)]
+    [InlineData("stable", "/local/packages", false)]
     [InlineData("daily", "https://daily.example/v3/index.json", true)]
-    public void ShouldCreateNuGetConfig_UsesResolvedSources(string name, string source, bool expected)
+    public void ShouldCreateNuGetConfig_UsesChannelPolicy(string name, string source, bool expected)
     {
         var channel = PackageChannel.CreateExplicitChannel(
             name, PackageChannelQuality.Prerelease,

@@ -1245,8 +1245,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// drop a workspace <c>nuget.config</c>. Stable package resolution uses ambient NuGet
     /// configuration, so a <c>&lt;clear/&gt;</c>-based config would be redundant
     /// and would wipe any additional feeds the user already relies on. The packaging service
-    /// still registers a <c>stable</c> channel with mappings to nuget.org, proving the skip is
-    /// driven by its resolved public sources rather than an absence of mappings.
+    /// still registers a <c>stable</c> channel with a (test) feed source, proving the skip is
+    /// driven by the channel name rather than an absence of mappings.
     /// </summary>
     [Fact]
     public async Task InitCommand_SingleFileMode_StableIdentity_DoesNotCreateNuGetConfig()
@@ -2312,14 +2312,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     private static string SourceForChannel(string channelName)
-        => channelName == PackageChannelNames.Stable
-            ? PackageSources.NuGetOrg
-            : $"https://feeds.test.invalid/{channelName}/v3/index.json";
+        => $"https://feeds.test.invalid/{channelName}/v3/index.json";
 
     private static string FallbackSourceForChannel(string channelName)
-        => channelName == PackageChannelNames.Stable
-            ? PackageSources.NuGetOrg
-            : $"https://feeds.test.invalid/{channelName}-fallback/v3/index.json";
+        => $"https://feeds.test.invalid/{channelName}-fallback/v3/index.json";
 
     /// <summary>
     /// Asserts that native NuGet evaluation routes Aspire packages exclusively to the selected channel.

@@ -25,6 +25,48 @@ namespace Aspire.Cli.Tests.Templating;
 public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData("stable", "https://api.nuget.org/v3/index.json", false, false)]
+    [InlineData("preview", "https://api.nuget.org/v3/index.json", true, false)]
+    [InlineData("stable", "https://enterprise.example/v3/index.json", false, true)]
+    [InlineData("stable", "packages", false, true)]
+    [InlineData("daily", "https://daily.example/v3/index.json", true, true)]
+    [InlineData("staging", "https://staging.example/v3/index.json", true, true)]
+    [InlineData("pr-12345", "packages", true, true)]
+    [InlineData("local", "packages", true, true)]
+    public async Task TemplateEngineAndBuiltInScaffolding_UseIndependentCreationPolicies(
+        string channelName, string source, bool builtInCreatesConfig, bool templateEngineCreatesConfig)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (source == "packages")
+        {
+            source = workspace.CreateDirectory(source).FullName;
+        }
+        var builtInOutput = workspace.CreateDirectory("built-in");
+        var templateEngineOutput = workspace.CreateDirectory("template-engine");
+        var channel = PackageChannel.CreateExplicitChannel(
+            channelName, PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", source)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var service = CreateService(executionContext: workspace.CreateExecutionContext());
+
+        await service.PromptToCreateNuGetConfigAsync(channel, builtInOutput.FullName, CancellationToken.None);
+        await service.CreateNuGetConfigIfMissingAsync(channel, templateEngineOutput.FullName, CancellationToken.None);
+
+        Assert.Equal(builtInCreatesConfig, File.Exists(Path.Combine(builtInOutput.FullName, "nuget.config")));
+        Assert.Equal(templateEngineCreatesConfig, File.Exists(Path.Combine(templateEngineOutput.FullName, "nuget.config")));
+        if (builtInCreatesConfig)
+        {
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(builtInOutput.FullName, "Aspire.Hosting"),
+                PackageSourceIdentity.Comparer);
+        }
+        if (templateEngineCreatesConfig)
+        {
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(templateEngineOutput.FullName, "Aspire.Hosting"),
+                PackageSourceIdentity.Comparer);
+        }
+    }
+
+    [Theory]
     [InlineData("stable", "nuget.config")]
     [InlineData("daily", "NuGet.Config")]
     [InlineData("staging", "NuGet.config")]

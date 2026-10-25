@@ -172,29 +172,9 @@
         <target state="new">Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</target>
         <note />
       </trans-unit>
-      <trans-unit id="GitBlobTooLarge">
-        <source>The Git blob exceeds the requested size limit.</source>
-        <target state="new">The Git blob exceeds the requested size limit.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="GitCommandFailed">
         <source>The Git command failed. Check the repository and selected reference.</source>
         <target state="new">The Git command failed. Check the repository and selected reference.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="GitFileNotFound">
-        <source>The selected file was not found in the Git snapshot.</source>
-        <target state="new">The selected file was not found in the Git snapshot.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="GitFileNotRegular">
-        <source>The selected Git entry is not a regular file. Symbolic links and directories are not supported.</source>
-        <target state="new">The selected Git entry is not a regular file. Symbolic links and directories are not supported.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="GitInvalidOutput">
-        <source>Git returned an invalid or incomplete response.</source>
-        <target state="new">Git returned an invalid or incomplete response.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitRepositoryUnavailable">

@@ -405,38 +405,6 @@ public class GitRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, Assert.IsType<TestProcessExecution>(Assert.Single(processFactory.CreatedExecutions)).DisposeCount);
     }
 
-    [Fact]
-    public async Task ReadBlobAsync_RejectsOversizedBlobBeforeRequestingContent()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var processFactory = new TestProcessExecutionFactory { AttemptCallback = (_, _) => (0, "1025") };
-        using var provider = CreateServices(workspace, processFactory, interactive: false).BuildServiceProvider();
-
-        var exception = await Assert.ThrowsAsync<GitCommandException>(() => provider.GetRequiredService<IGitRunner>()
-            .ReadBlobAsync(workspace.WorkspaceRoot, CommitSha, 1024, TestContext.Current.CancellationToken));
-
-        Assert.Equal(GitFailure.BlobTooLarge, exception.Failure);
-        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(processFactory.CreatedExecutions));
-        Assert.Equal(["--literal-pathspecs", $"--git-dir={workspace.WorkspaceRoot.FullName}", "cat-file", "-s", CommitSha], execution.Arguments);
-    }
-
-    [Theory]
-    [InlineData("-1")]
-    [InlineData("not a size")]
-    [InlineData("9223372036854775808")]
-    public async Task ReadBlobAsync_RejectsInvalidSizes(string size)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var processFactory = new TestProcessExecutionFactory { AttemptCallback = (_, _) => (0, size) };
-        using var provider = CreateServices(workspace, processFactory, interactive: false).BuildServiceProvider();
-
-        var exception = await Assert.ThrowsAsync<GitCommandException>(() => provider.GetRequiredService<IGitRunner>()
-            .ReadBlobAsync(workspace.WorkspaceRoot, CommitSha, 1024, TestContext.Current.CancellationToken));
-
-        Assert.Equal(GitFailure.InvalidOutput, exception.Failure);
-        Assert.Single(processFactory.CreatedExecutions);
-    }
-
     private IServiceCollection CreateServices(TemporaryWorkspace workspace, TestProcessExecutionFactory processFactory, bool interactive)
     {
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>

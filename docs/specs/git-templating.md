@@ -77,7 +77,7 @@ Optional agent initialization still applies; `--suppress-agent-init` skips it.
 | `TemplateEngineHost` | Register concrete engine components and exclude Git metadata from the engine's source view |
 | [`TemplateHostConfiguration`](../../src/Aspire.Cli/Templating/TemplateHostConfiguration.cs) | Read the selected host file's parameter visibility and prompt labels without merging fallback files |
 | `TemplateParameterPromptState` | Evaluate interactive parameter conditions and order their dependencies using engine types and expressions |
-| [`IGitRunner` / `GitRunner`](../../src/Aspire.Cli/Git/GitRunner.cs) | Resolve refs, acquire exact commits, and expose checkout-free file access |
+| [`IGitRunner` / `GitRunner`](../../src/Aspire.Cli/Git/GitRunner.cs) | Resolve refs and acquire exact-commit checkouts |
 | [`TemplateNuGetConfigService`](../../src/Aspire.Cli/Templating/TemplateNuGetConfigService.cs) | Create missing output-root NuGet configuration without taking ownership of template-generated configuration |
 | [`PackageChannel`](../../src/Aspire.Cli/Packaging/PackageChannel.cs) and `PackagingService` | Resolve package-source policy from the running CLI identity and overrides |
 | [`BundleNuGetService`](../../src/Aspire.Cli/NuGet/BundleNuGetService.cs) | Build and persist NuGet policy using the existing configuration hierarchy |
@@ -181,29 +181,6 @@ Each public Git operation has a two-minute deadline. Initialization, fetching,
 checkout, and verification share one deadline within a clone operation. Caller
 cancellation remains cancellation; expiry of the runner's own deadline becomes a
 classified timeout.
-
-### Reusable checkout-free operations
-
-The Git abstraction is not template-specific. In addition to ref resolution and
-checkout acquisition, it supports:
-
-- Shallow fetching an exact commit into a bare repository and verifying it.
-- Looking up the blob ID of a regular file at an exact commit without checkout.
-- Reading blob bytes with a caller-supplied maximum size.
-
-Blob lookup uses repository-relative forward-slash paths and rejects empty,
-`.` and `..` segments, backslashes, and control characters. Symlinks, directories,
-and gitlinks are not accepted as regular files. Blob reads check the object size
-before reading content and verify the resulting byte count.
-
-Blob stdout is redirected through a caller-owned `StandardOutputHandle` in the
-shared process-execution options. This preserves encoding and line endings rather
-than passing binary content through line-oriented text callbacks. The caller
-owns the handle's lifetime.
-
-Consumers own parsing, schema validation, size policy, and cache lifetime. The
-template factory currently owns its checkout cache; these APIs do not introduce
-a shared bare-object pool or a cache manager for unrelated consumers.
 
 ## Template parameters and generation
 
@@ -520,11 +497,16 @@ There are two distinct ownership models:
   config exists, and the resolved policy requires custom sources; the CLI creates
   the missing file.
 
-The decision is based on actual resolved sources, not version suffixes or the
-channel name alone. `PackageChannel.ShouldCreateNuGetConfig()` checks whether
-any resolved mapping uses a source other than the default nuget.org source.
+For directory and Git templates, `TemplateNuGetConfigService.CreateNuGetConfigIfMissingAsync`
+checks actual resolved sources, not version suffixes or the channel name alone.
+It creates a missing config only when a mapping uses a source other than the default nuget.org source.
 A stable-shaped version can require a staging feed, and a stable-named identity
 can have an explicit local-package or service-index override.
+
+This policy is isolated from built-in scaffolding. Existing `aspire new`, `aspire init`,
+and `aspire update` callers retain the channel-based `PackageChannel.ShouldCreateNuGetConfig()`
+decision, including stable identities that use custom sources. Both paths reuse the
+existing configuration builder and writer.
 
 ### Scenario matrix
 
@@ -609,10 +591,10 @@ whether a source URL appears in XML.
 | --- | --- |
 | [`NewCommandLocalTemplateTests`](../../tests/Aspire.Cli.Tests/Commands/NewCommandLocalTemplateTests.cs) | Discovery, metadata-driven prompts, engine defaults and validation, identity projection, missing-config scenarios, enterprise mappings, Git/cache preservation, and failure reporting |
 | [`NewCommandLocalTemplateTests.HostConfiguration`](../../tests/Aspire.Cli.Tests/Commands/NewCommandLocalTemplateTests.HostConfiguration.cs) | Host-file precedence without merging, invalid configuration, all prompt types, generated-port fallbacks, hidden requirements and controllers, and curated prompts from the actual built-in template sources |
-| [`PackageChannelTests`](../../tests/Aspire.Cli.Tests/Packaging/PackageChannelTests.cs) | Source-based config-creation decisions, including public previews and stable overrides |
-| [`TemplateNuGetConfigServiceTests`](../../tests/Aspire.Cli.Tests/Templating/TemplateNuGetConfigServiceTests.cs) | Byte-preserving ownership, filename casing, inherited/nested configuration, and idempotence |
+| [`PackageChannelTests`](../../tests/Aspire.Cli.Tests/Packaging/PackageChannelTests.cs) | Existing channel-based config-creation decisions, including stable custom sources |
+| [`TemplateNuGetConfigServiceTests`](../../tests/Aspire.Cli.Tests/Templating/TemplateNuGetConfigServiceTests.cs) | Independent built-in and template-engine policies, source-based creation, byte-preserving ownership, filename casing, inherited/nested configuration, and idempotence |
 | `NewCommandTests`, `InitCommandTests`, and template-factory tests | Existing built-in new/init consumers of shared channel policy |
-| `GitRunnerTests` and `GitBlobTests` | Ref resolution, exact-commit acquisition, environment isolation, deadlines, classified failures, and bounded byte-preserving reads |
+| `GitRunnerTests` and `GitCheckoutTests` | Ref resolution, exact-commit checkouts, environment isolation, deadlines, and classified failures |
 | [`CustomTemplateTests`](../../tests/Aspire.Cli.EndToEnd.Tests/CustomTemplateTests.cs) | Installed native CLI generation without a .NET SDK, including directory, Git, and noninteractive-default scenarios |
 
 NuGet routing assertions use `NuGetTestHelper.GetEligiblePackageSources`, which

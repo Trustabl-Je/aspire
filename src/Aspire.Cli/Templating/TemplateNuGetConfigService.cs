@@ -39,6 +39,8 @@ internal sealed class TemplateNuGetConfigService(
     /// The template engine calls this only after a createNuGetConfig host opt-in. The opt-in
     /// requests channel policy, not unconditional file creation: nuget.org-only sources still
     /// use ambient configuration, while custom sources can require a new output-root file.
+    /// This source-based decision is specific to template-engine generation; built-in
+    /// scaffolding retains its channel-based policy.
     /// </remarks>
     public Task CreateNuGetConfigIfMissingAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
         => CreateNuGetConfigIfMissingAsync(channel, outputPath, outputPath, cancellationToken);
@@ -59,10 +61,11 @@ internal sealed class TemplateNuGetConfigService(
             return;
         }
 
-        if (channel.ShouldCreateNuGetConfig())
+        if (channel.Mappings is { } mappings &&
+            mappings.Any(static mapping =>
+                !PackageSourceIdentity.Comparer.Equals(mapping.Source, PackageSources.NuGetOrg)))
         {
-            if (channel.Mappings is { } mappings &&
-                mappings.Any(static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)))
+            if (mappings.Any(static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)))
             {
                 throw new ArgumentException(Resources.NewCommandStrings.SourceWithCredentialsCannotBePersisted);
             }

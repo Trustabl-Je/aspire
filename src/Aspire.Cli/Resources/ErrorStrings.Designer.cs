@@ -106,42 +106,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The selected file was not found in the Git snapshot..
-        /// </summary>
-        internal static string GitFileNotFound {
-            get {
-                return ResourceManager.GetString("GitFileNotFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The selected Git entry is not a regular file. Symbolic links and directories are not supported..
-        /// </summary>
-        internal static string GitFileNotRegular {
-            get {
-                return ResourceManager.GetString("GitFileNotRegular", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The Git blob exceeds the requested size limit..
-        /// </summary>
-        internal static string GitBlobTooLarge {
-            get {
-                return ResourceManager.GetString("GitBlobTooLarge", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Git returned an invalid or incomplete response..
-        /// </summary>
-        internal static string GitInvalidOutput {
-            get {
-                return ResourceManager.GetString("GitInvalidOutput", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Already connected to AppHost backchannel..
         /// </summary>
         internal static string AlreadyConnectedToBackchannel {

@@ -2,10 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.ComponentModel;
-using System.Globalization;
 using System.Text;
 using Aspire.Cli.DotNet;
-using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Cli.Git;
 
@@ -67,7 +65,27 @@ internal sealed class GitRunner(
     public Task CloneAsync(string repository, DirectoryInfo destination, string commitSha, CancellationToken cancellationToken) =>
         WithTimeoutAsync(async token =>
         {
-            await FetchCoreAsync(repository, destination, commitSha, bare: false, token);
+            if (!IsCommitSha(commitSha))
+            {
+                throw new ArgumentException("A full commit SHA is required.", nameof(commitSha));
+            }
+
+            if (!Path.IsPathRooted(repository) && !repository.Contains(':'))
+            {
+                var localPath = Path.GetFullPath(repository, executionContext.WorkingDirectory.FullName);
+                if (Directory.Exists(localPath))
+                {
+                    // Fetch runs inside the new checkout, not the caller's working directory.
+                    repository = localPath;
+                }
+            }
+
+            // Fetch the resolved SHA, not the original branch/tag: it can move between resolution
+            // and checkout. A depth-one fetch also avoids local clone hard links, so cleanup cannot
+            // change source repository object attributes. https://git-scm.com/docs/git-fetch
+            await RunAsync(["init", "--quiet", $"--object-format={(commitSha.Length == 64 ? "sha256" : "sha1")}", "--", destination.FullName],
+                executionContext.WorkingDirectory, token);
+            await RunAsync(["fetch", "--depth", "1", "--no-tags", "--", repository, commitSha], destination, token);
             await RunAsync(["checkout", "--detach", "--force", "FETCH_HEAD"], destination, token);
             var actualSha = (await RunAsync(["rev-parse", "--verify", "HEAD"], destination, token)).Trim();
             if (!string.Equals(actualSha, commitSha, StringComparison.OrdinalIgnoreCase))
@@ -76,124 +94,6 @@ internal sealed class GitRunner(
             }
 
             return true;
-        }, cancellationToken);
-
-    public Task FetchAsync(string repository, DirectoryInfo destination, string commitSha, CancellationToken cancellationToken) =>
-        WithTimeoutAsync(async token =>
-        {
-            await FetchCoreAsync(repository, destination, commitSha, bare: true, token);
-            var actualSha = (await RunAsync([$"--git-dir={destination.FullName}", "rev-parse", "--verify", "FETCH_HEAD^{commit}"],
-                destination, token)).Trim();
-            if (!string.Equals(actualSha, commitSha, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new GitReferenceException(commitSha);
-            }
-
-            return true;
-        }, cancellationToken);
-
-    private async Task FetchCoreAsync(string repository, DirectoryInfo destination, string commitSha, bool bare, CancellationToken cancellationToken)
-    {
-        if (!IsCommitSha(commitSha))
-        {
-            throw new ArgumentException("A full commit SHA is required.", nameof(commitSha));
-        }
-
-        if (!Path.IsPathRooted(repository) && !repository.Contains(':'))
-        {
-            var localPath = Path.GetFullPath(repository, executionContext.WorkingDirectory.FullName);
-            if (Directory.Exists(localPath))
-            {
-                // Fetch runs inside the new checkout, not the caller's working directory.
-                repository = localPath;
-            }
-        }
-
-        // Fetch the resolved SHA, not the original branch/tag: it can move between resolution
-        // and checkout. A depth-one fetch also avoids local clone hard links, so cleanup cannot
-        // change source repository object attributes. https://git-scm.com/docs/git-fetch
-        string[] initArguments = ["init", "--quiet", $"--object-format={(commitSha.Length == 64 ? "sha256" : "sha1")}"];
-        await RunAsync([.. initArguments, .. bare ? new[] { "--bare" } : [], "--", destination.FullName],
-            executionContext.WorkingDirectory, cancellationToken);
-        string[] gitArguments = bare ? [$"--git-dir={destination.FullName}"] : [];
-        await RunAsync([.. gitArguments, "fetch", "--depth", "1", "--no-tags", "--", repository, commitSha], destination, cancellationToken);
-    }
-
-    public Task<string> GetBlobIdAsync(DirectoryInfo gitDirectory, string commitSha, string path, CancellationToken cancellationToken) =>
-        WithTimeoutAsync(async token =>
-        {
-            if (!IsCommitSha(commitSha))
-            {
-                throw new ArgumentException("A full commit SHA is required.", nameof(commitSha));
-            }
-            if (path.Contains('\\') || path.Any(char.IsControl) || path.Split('/').Any(segment => segment is "" or "." or ".."))
-            {
-                throw new ArgumentException("A repository-relative path with forward slashes is required.", nameof(path));
-            }
-
-            var output = await RunAsync([$"--git-dir={gitDirectory.FullName}", "ls-tree", "--full-tree", "-z", commitSha, "--", path],
-                gitDirectory, token);
-            // git ls-tree -z emits "100644 blob <object-id>\tpath\0". The line-based
-            // process callback adds a newline; Git paths accepted above cannot end in one.
-            var entry = output.TrimEnd('\r', '\n');
-            if (entry.Length == 0)
-            {
-                throw new GitCommandException(GitFailure.FileNotFound, null);
-            }
-            var tab = entry.IndexOf('\t');
-            var header = tab < 0 ? [] : entry[..tab].Split(' ');
-            if (header.Length != 3 || !IsCommitSha(header[2]) || entry.IndexOf('\0') != entry.Length - 1
-                || entry[(tab + 1)..^1] != path)
-            {
-                throw new GitCommandException(GitFailure.InvalidOutput, null);
-            }
-            if (header[0] is not ("100644" or "100755") || header[1] != "blob")
-            {
-                throw new GitCommandException(GitFailure.FileNotRegular, null);
-            }
-
-            return header[2].ToLowerInvariant();
-        }, cancellationToken);
-
-    public Task<byte[]> ReadBlobAsync(DirectoryInfo gitDirectory, string blobId, int maximumBytes, CancellationToken cancellationToken) =>
-        WithTimeoutAsync(async token =>
-        {
-            ArgumentOutOfRangeException.ThrowIfNegative(maximumBytes);
-            if (!IsCommitSha(blobId))
-            {
-                throw new ArgumentException("A full blob object ID is required.", nameof(blobId));
-            }
-            var output = await RunAsync([$"--git-dir={gitDirectory.FullName}", "cat-file", "-s", blobId], gitDirectory, token);
-            if (!long.TryParse(output.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var size))
-            {
-                throw new GitCommandException(GitFailure.InvalidOutput, null);
-            }
-            if (size > maximumBytes)
-            {
-                throw new GitCommandException(GitFailure.BlobTooLarge, null);
-            }
-
-            var temporaryDirectory = Directory.CreateTempSubdirectory("aspire-git-blob-");
-            try
-            {
-                var path = Path.Combine(temporaryDirectory.FullName, "blob");
-                // Blob bytes and line endings must survive unchanged. Redirect stdout to a
-                // caller-owned file handle rather than through the process factory's line reader.
-                using (var handle = File.OpenHandle(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
-                {
-                    await RunAsync([$"--git-dir={gitDirectory.FullName}", "cat-file", "blob", blobId], gitDirectory, token, handle);
-                }
-                if (new FileInfo(path).Length != size)
-                {
-                    throw new GitCommandException(GitFailure.InvalidOutput, null);
-                }
-
-                return await File.ReadAllBytesAsync(path, token);
-            }
-            finally
-            {
-                temporaryDirectory.Delete(recursive: true);
-            }
         }, cancellationToken);
 
     private static bool IsCommitSha(string value) =>
@@ -214,7 +114,7 @@ internal sealed class GitRunner(
         }
     }
 
-    private async Task<string> RunAsync(string[] arguments, DirectoryInfo workingDirectory, CancellationToken cancellationToken, SafeFileHandle? outputHandle = null)
+    private async Task<string> RunAsync(string[] arguments, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var output = new StringBuilder();
@@ -227,12 +127,11 @@ internal sealed class GitRunner(
                 workingDirectory,
                 new ProcessInvocationOptions
                 {
-                    // URLs, blob contents and Git diagnostics can contain credentials or
+                    // URLs and Git diagnostics can contain credentials or
                     // private data. Classify stderr locally without logging or retaining it.
                     SuppressLogging = true,
                     EnvironmentVariableFilter = s_repositoryEnvironmentVariables.Contains,
-                    StandardOutputHandle = outputHandle,
-                    StandardOutputCallback = outputHandle is null ? line => output.AppendLine(line) : null,
+                    StandardOutputCallback = line => output.AppendLine(line),
                     StandardErrorCallback = line =>
                     {
                         if (line.Contains("authentication", StringComparison.OrdinalIgnoreCase)

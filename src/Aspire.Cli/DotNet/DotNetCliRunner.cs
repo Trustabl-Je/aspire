@@ -53,12 +53,6 @@ internal sealed class ProcessInvocationOptions
     public Action<string>? StandardOutputCallback { get; set; }
     public Action<string>? StandardErrorCallback { get; set; }
 
-    /// <summary>
-    /// Redirects stdout bytes to a caller-owned handle that must stay open until the process exits.
-    /// Requires directly managed, attached execution without a stdout line callback.
-    /// </summary>
-    public Microsoft.Win32.SafeHandles.SafeFileHandle? StandardOutputHandle { get; set; }
-
     public bool NoLaunchProfile { get; set; }
 
     /// <summary>
@@ -179,7 +173,6 @@ internal sealed class ProcessInvocationOptions
     {
         StandardOutputCallback = StandardOutputCallback,
         StandardErrorCallback = StandardErrorCallback,
-        StandardOutputHandle = StandardOutputHandle,
         NoLaunchProfile = NoLaunchProfile,
         NoRestore = NoRestore,
         ExcludeRestorePackageImports = ExcludeRestorePackageImports,
@@ -446,14 +439,13 @@ internal sealed class DotNetCliRunner(
             CreateSupervisorStartInfo = options.CreateSupervisorStartInfo,
             Detached = options.Detached,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
-            StandardOutputHandle = options.StandardOutputHandle,
             EnvironmentVariables = options.EnvironmentVariables,
             // Without this the redaction boundary is lost between the runner and the process
             // factory, and a direct AppHost launch would log its forwarded arguments verbatim.
             AppHostArgumentStartIndex = options.AppHostArgumentStartIndex,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,
-            StandardOutputCallback = options.StandardOutputHandle is null ? line =>
+            StandardOutputCallback = line =>
             {
                 var lineCount = Interlocked.Increment(ref outputCounters.StdoutLineCount);
                 if (lineCount == 1)
@@ -461,7 +453,7 @@ internal sealed class DotNetCliRunner(
                     activity.AddDotNetFirstStdoutEvent();
                 }
                 options.StandardOutputCallback?.Invoke(line);
-            } : null,
+            },
             StandardErrorCallback = line =>
             {
                 var lineCount = Interlocked.Increment(ref outputCounters.StderrLineCount);
