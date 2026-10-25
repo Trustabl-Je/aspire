@@ -432,7 +432,8 @@ internal sealed class ConfigSourceService(
             await File.WriteAllTextAsync(Path.Combine(snapshotDirectory, "metadata.json"),
                 JsonSerializer.Serialize(snapshot.Metadata, JsonSourceGenerationContext.Default.ConfigSourceMetadata), cancellationToken);
             await File.WriteAllTextAsync(temporaryPointer, snapshotName, cancellationToken);
-            await WriteCheckMetadataAsync(cacheDirectory, new(identity, commit, version, now, source.AppliedVersion), cancellationToken);
+            await WriteCheckMetadataAsync(cacheDirectory,
+                new(identity, commit, version, now, source.AppliedVersion is null ? [] : [source.AppliedVersion]), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             // The immutable snapshot contains both files. Only this pointer is replaced, so
             // failures or cancellation cannot publish half a configuration/metadata pair.
@@ -490,8 +491,10 @@ internal sealed class ConfigSourceService(
             var age = timeProvider.GetUtcNow() - previous.CheckedAt;
             // A different app can have applied a version newer than this shared observation.
             // Reuse a mismatch only when that applied version was actually checked against it.
+            // Older metadata without the version set is revalidated once.
             if (age >= TimeSpan.Zero && age < TimeSpan.FromHours(24)
-                && sources.All(binding => previous.Version == binding.AppliedVersion || previous.ComparedAppliedVersion == binding.AppliedVersion))
+                && sources.All(binding => previous.Version == binding.AppliedVersion
+                    || previous.ComparedAppliedVersions?.Contains(binding.AppliedVersion, StringComparer.Ordinal) is true))
             {
                 return previous;
             }
@@ -506,7 +509,8 @@ internal sealed class ConfigSourceService(
                 Ref = source.Ref
             };
             var (commit, version) = await git.CheckAsync(identity, temporaryDirectory.FullName, cancellationToken);
-            var metadata = new ConfigSourceCheckMetadata(identity, commit, version, timeProvider.GetUtcNow(), source.AppliedVersion);
+            var comparedAppliedVersions = sources.Select(binding => binding.AppliedVersion).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
+            var metadata = new ConfigSourceCheckMetadata(identity, commit, version, timeProvider.GetUtcNow(), comparedAppliedVersions);
             await WriteCheckMetadataAsync(cacheDirectory, metadata, cancellationToken);
             return metadata;
         }

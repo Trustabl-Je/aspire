@@ -215,15 +215,19 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(originalRoot, await File.ReadAllTextAsync(rootPath));
     }
 
-    [Fact]
-    public async Task CheckProject_SharedSourceRevalidatesCacheAgainstAllAppliedVersions()
+    [Theory]
+    [InlineData(0, 0, 2)]
+    [InlineData(23, 59, 2)]
+    [InlineData(24, 0, 3)]
+    public async Task CheckProject_SharedSourceRevalidatesCacheAgainstAllAppliedVersions(int hours, int minutes, int expectedChecks)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var project = workspace.CreateDirectory("project");
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, project, CancellationToken.None);
         var git = new TestConfigSourceGitClient();
         var context = workspace.CreateExecutionContext();
-        using (var first = TestConfigSourceServices.Create(context, git: git))
+        var clock = new AdjustableTimeProvider();
+        using (var first = TestConfigSourceServices.Create(context, git: git, clock: clock))
         {
             await first.CheckProjectAsync(project, force: false, CancellationToken.None);
         }
@@ -234,14 +238,25 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             Ref = s_appliedSource.Ref,
             AppliedVersion = "version-2"
         }, workspace.WorkspaceRoot, CancellationToken.None);
-        git.Check = (_, _) => Task.FromResult(("commit-2", "version-2"));
+        git.Check = (_, _) => Task.FromResult(("commit-3", "version-3"));
         var interaction = new TestInteractionService();
-        using var service = TestConfigSourceServices.Create(context, git: git, interaction: interaction);
-
-        await service.CheckProjectAsync(project, force: false, CancellationToken.None);
-        service.NotifyIfUpdateAvailable();
+        using (var service = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction))
+        {
+            await service.CheckProjectAsync(project, force: false, CancellationToken.None);
+            service.NotifyIfUpdateAvailable();
+        }
 
         Assert.Equal(2, git.CheckCalls);
+        Assert.Equal(ConfigSourceStrings.UpdateAvailable, Assert.Single(interaction.DisplayedMessages).Message);
+
+        clock.UtcNow += TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes);
+        interaction = new TestInteractionService();
+        using var next = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction);
+
+        await next.CheckProjectAsync(project, force: false, CancellationToken.None);
+        next.NotifyIfUpdateAvailable();
+
+        Assert.Equal(expectedChecks, git.CheckCalls);
         Assert.Equal(ConfigSourceStrings.UpdateAvailable, Assert.Single(interaction.DisplayedMessages).Message);
     }
 
@@ -789,6 +804,54 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(1, git.CheckCalls);
         Assert.Equal(ConfigSourceStrings.UpdateAvailable, Assert.Single(interaction.DisplayedMessages).Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CheckProject_LegacyCheckMetadataRevalidatesMismatchesOnce(bool matchesObservedVersion)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
+        var context = workspace.CreateExecutionContext();
+        var clock = new AdjustableTimeProvider();
+        var git = new TestConfigSourceGitClient { Check = (_, _) => Task.FromResult(("commit-2", "version-2")) };
+        using var first = TestConfigSourceServices.Create(context, git: git, clock: clock);
+        await first.CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None);
+        var checkPath = Path.Combine(first.GetCacheDirectory(s_source), "check.json");
+        var tracking = JsonNode.Parse(await File.ReadAllTextAsync(checkPath))!.AsObject();
+        tracking.Remove("comparedAppliedVersions");
+        tracking["comparedAppliedVersion"] = s_appliedSource.AppliedVersion;
+        await File.WriteAllTextAsync(checkPath, tracking.ToJsonString());
+        if (matchesObservedVersion)
+        {
+            await TestConfigSourceServices.SaveBindingAsync(new ConfigSource
+            {
+                Repository = s_appliedSource.Repository,
+                Path = s_appliedSource.Path,
+                Ref = s_appliedSource.Ref,
+                AppliedVersion = "version-2"
+            }, workspace.WorkspaceRoot, CancellationToken.None);
+        }
+
+        for (var invocation = 0; invocation < 2; invocation++)
+        {
+            var interaction = new TestInteractionService();
+            using var service = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction);
+            await service.CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None);
+            service.NotifyIfUpdateAvailable();
+
+            if (matchesObservedVersion)
+            {
+                Assert.Empty(interaction.DisplayedMessages);
+            }
+            else
+            {
+                Assert.Equal(ConfigSourceStrings.UpdateAvailable, Assert.Single(interaction.DisplayedMessages).Message);
+            }
+        }
+
+        Assert.Equal(matchesObservedVersion ? 1 : 2, git.CheckCalls);
     }
 
     [Theory]

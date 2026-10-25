@@ -221,7 +221,7 @@ Preserve the 24-hour check cadence, measured from the last successful version ch
 | Observed version differs from the app's applied version | Report that an update is available |
 | Version check fails | Report the check failure and continue the requested operation using the app's saved settings |
 
-When reusing a cached mismatch, also record which applied version it was compared against. A cloned app can already contain a version newer than the cached observation; revalidate an unfamiliar applied version before advertising an update. A cached observation equal to the app's applied version can be reused directly.
+When reusing a cached mismatch, record every applied version compared against the shared observation, including differing versions in ancestor bindings. Repeated commands can then reuse that observation for all those bindings within the check interval. A cloned app can already contain a version newer than the cached observation; revalidate an unfamiliar applied version before advertising an update. Older check metadata without the compared-version set is revalidated before reusing a mismatch. A cached observation equal to the app's applied version can be reused directly.
 
 If an update is available, emit a notice such as:
 
