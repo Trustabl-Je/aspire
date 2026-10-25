@@ -322,7 +322,8 @@ identity-sidecar package-resolution fix specifically enables.
 #    Prerelease shape instead: /p:VersionPrefix=13.5.0 /p:VersionSuffix=preview.1
 STABLE_DIR="$PWD/artifacts/packages/Release/Shipping"   # clean: one version per Aspire* id
 
-# 2. (Buildability) Register the local dir as an AMBIENT NuGet source — see note below.
+# 2. For TypeScript SDK restore only, register the local dir as an ambient source.
+#    C# scaffolding persists the custom feed in the project's NuGet.config.
 dotnet nuget add source "$STABLE_DIR" --name local-emulated-stable
 
 # 3. Emulate the release. aspire new + aspire add now resolve 13.5.0 from the local dir.
@@ -334,8 +335,8 @@ ASPIRE_CLI_CHANNEL=stable ASPIRE_CLI_VERSION=13.5.0 ASPIRE_CLI_PACKAGES="$STABLE
 > `.\localhive.ps1 -Version 13.5.0`) packs the stable shape, populates `~/.aspire/hives/local/packages`
 > with **only** the exact `13.5.0` packages, and installs the CLI — no manual `VersionPrefix`/
 > `StabilizePackageVersion` flags and no stale-version cleanup needed. Add `--archive` to also produce a
-> portable `.tar.gz` for the E2E tests (below). You still set the three `ASPIRE_CLI_*` env vars (and the
-> ambient source for buildability) to emulate the release from that hive.
+> portable `.tar.gz` for the E2E tests (below). You still set the three `ASPIRE_CLI_*` env vars (and,
+> for TypeScript SDK restore, the ambient source) to emulate the release from that hive.
 >
 > **Fully turnkey with `-o DIR`.** `./localhive.sh --version 13.5.0 -o /tmp/aspire-1350` writes a
 > self-contained portable layout (`bin/`, `hives/local/packages/`) **and** an `activate.sh`
@@ -370,18 +371,13 @@ to nuget.org for `aspire new`/`aspire add`. The CLI now recognizes a channel as 
 its **mappings** (an `Aspire*` mapping pointing at an existing directory), not its name, so the
 override works under every emulated identity.
 
-> **⚠️ Buildability needs an _ambient_ NuGet source (step 2).** A real `stable` build deliberately
-> drops **no** per-project `NuGet.config` (it relies on nuget.org being an ambient source). When
-> you emulate `stable` with a *local* version that isn't on nuget.org, the apphost still won't
-> **build** unless the local dir is reachable: MSBuild resolves the `Aspire.AppHost.Sdk` **before**
-> restore and reads only `NuGet.config` sources (it ignores `RestoreAdditionalProjectSources` and
-> `ASPIRE_CLI_PACKAGES`). So `aspire new` will scaffold the project (templates come from the local
-> dir), but `aspire add`/`aspire run` fail with `Could not resolve SDK "Aspire.AppHost.Sdk/13.5.0"`
-> until you add the local dir as an ambient source (`dotnet nuget add source`, a user/parent-level
-> `NuGet.config`, etc.). This mirrors how real stable relies on an ambient nuget.org — the local
-> dir is the emulated ambient feed. `aspire add` itself still drops a project `NuGet.config` for the
-> `dotnet add package` restore; the ambient source is only needed for the SDK-resolution build step.
-> Remove the source when done: `dotnet nuget remove source local-emulated-stable`.
+> **Buildability follows the resolved sources, not the channel name.** Normal `stable` builds
+> using nuget.org leave project `NuGet.config` absent. A local-packages override is a custom feed:
+> C# scaffolding persists that feed and its `Aspire*` mapping even under a `stable` identity, so
+> MSBuild can resolve the local-only `Aspire.AppHost.Sdk` without ambient hive registration.
+> TypeScript scaffolding does not persist a project config; SDK restore on that path still needs
+> the ambient source from step 2. MSBuild reads `NuGet.config`, not `ASPIRE_CLI_PACKAGES`.
+> Remove an ambient source when done: `dotnet nuget remove source local-emulated-stable`.
 
 ## ⚠️ `ASPIRE_CLI_PACKAGES` cleanliness caveat (fail-fast)
 

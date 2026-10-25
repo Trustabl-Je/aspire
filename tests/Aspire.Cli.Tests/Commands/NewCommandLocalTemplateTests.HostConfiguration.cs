@@ -375,31 +375,41 @@ public partial class NewCommandLocalTemplateTests
             Assert.Single(NuGetTestHelper.GetEligiblePackageSources(output, "Aspire.Hosting.Redis")));
     }
 
-    public static TheoryData<string, string, string[], string[]> BuiltInTemplatePrompts => new()
+    public static TheoryData<string, string, string[], string[], string?, string> BuiltInTemplatePrompts => new()
     {
-        { "aspire-apphost", "None", [], [] },
-        { "aspire-apphost-singlefile", "None", [], ["Use .dev.localhost URLs"] },
-        { "aspire-empty", "None", [], [] },
-        { "aspire-starter", "None", ["Test framework"], ["Use Redis for caching", "Use .dev.localhost URLs"] },
-        { "aspire-starter", "xUnit.net", ["Test framework", "xUnit.net version"], ["Use Redis for caching", "Use .dev.localhost URLs"] },
-        { "aspire-ts-cs-starter", "None", [], ["Use Redis for caching", "Use .dev.localhost URLs"] }
+        { "aspire-apphost", "None", [], [], "17.0", "17.0.0" },
+        { "aspire-apphost-singlefile", "None", [], ["Use .dev.localhost URLs"], "17.0", "17.0.0" },
+        { "aspire-empty", "None", [], [], "17.0", "17.0.0" },
+        { "aspire-empty", "None", [], [], "17.0", "17.0.0-preview.1" },
+        { "aspire-empty", "None", [], [], "17.0", "17.0.0-dev" },
+        { "aspire-empty", "None", [], [], null, "17.0.0" },
+        { "aspire-empty", "None", [], [], null, "17.0.0-preview.1" },
+        { "aspire-empty", "None", [], [], null, "17.0.0-dev" },
+        { "aspire-starter", "None", ["Test framework"], ["Use Redis for caching", "Use .dev.localhost URLs"], "17.0", "17.0.0" },
+        { "aspire-starter", "xUnit.net", ["Test framework", "xUnit.net version"], ["Use Redis for caching", "Use .dev.localhost URLs"], "17.0", "17.0.0" },
+        { "aspire-ts-cs-starter", "None", [], ["Use Redis for caching", "Use .dev.localhost URLs"], "17.0", "17.0.0" }
     };
 
     [Theory]
     [MemberData(nameof(BuiltInTemplatePrompts))]
     public async Task LocalTemplate_BuiltInTemplatesHaveCuratedPromptsAndGeneratedPorts(
-        string templateName, string testFramework, string[] expectedChoices, string[] expectedBooleans)
+        string templateName, string testFramework, string[] expectedChoices, string[] expectedBooleans,
+        string? packagedVersion, string identityVersion)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var source = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
             "..", "..", "..", "..", "..", "src", "Aspire.ProjectTemplates", "templates", templateName));
         var template = workspace.CreateDirectory("template");
         FileSystemHelper.CopyDirectory(source, template.FullName);
-        var configurationPath = Path.Combine(template.FullName, ".template.config", "template.json");
-        // Materialize build-time version metadata in the fixture, as template packaging does.
-        await File.WriteAllTextAsync(configurationPath,
-            (await File.ReadAllTextAsync(configurationPath))
-                .Replace("!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!", "17.0.0", StringComparison.Ordinal));
+        if (packagedVersion is not null)
+        {
+            var configurationPath = Path.Combine(template.FullName, ".template.config", "template.json");
+            // Packaging replaces this metadata with major.minor, not the full SDK version.
+            // Keep the unmodified source template covered as well.
+            await File.WriteAllTextAsync(configurationPath,
+                (await File.ReadAllTextAsync(configurationPath))
+                    .Replace("!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!", packagedVersion, StringComparison.Ordinal));
+        }
         var interaction = new TestInteractionService();
         foreach (var _ in expectedBooleans)
         {
@@ -412,7 +422,7 @@ public partial class NewCommandLocalTemplateTests
             return prompt == "Test framework" ? testFramework : choices.Cast<string>().First();
         };
         var services = CreateServices(workspace, interaction, interactive: true);
-        services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "stable", identityVersion: "17.0.0"));
+        services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "stable", identityVersion: identityVersion));
         using var provider = services.BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
