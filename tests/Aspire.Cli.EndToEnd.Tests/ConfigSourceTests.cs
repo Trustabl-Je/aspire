@@ -83,7 +83,7 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
     public Task Run_NotifiesWhenAncestorConfigurationSourceUpdateIsAvailable()
         => ConfigSourceTestContext.RunAsync(output, async context =>
         {
-            await context.CreateProjectAsync();
+            await context.CreateProjectWithNestedAppHostAsync();
             var original = await context.AssertSourceAppliedAsync("original");
             await context.UseAppHostDirectoryAsync();
             await context.UpdateSourceAsync();
@@ -96,7 +96,7 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
     public Task Update_ConfigSourceRefreshesAncestorConfiguration()
         => ConfigSourceTestContext.RunAsync(output, async context =>
         {
-            await context.CreateProjectAsync();
+            await context.CreateProjectWithNestedAppHostAsync();
             var original = await context.AssertSourceAppliedAsync("original");
             await context.UseAppHostDirectoryAsync();
             await context.UpdateSourceAsync();

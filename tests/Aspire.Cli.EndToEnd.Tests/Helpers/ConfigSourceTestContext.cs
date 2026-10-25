@@ -61,6 +61,15 @@ internal sealed class ConfigSourceTestContext
         await ConfigureProjectAsync();
     }
 
+    public async Task CreateProjectWithNestedAppHostAsync()
+    {
+        await CreateProjectAsync();
+        // The empty C# template puts the AppHost at the root. Keep its source-bound
+        // configuration there so commands in the nested AppHost must discover an ancestor.
+        await _auto.RunCommandAsync("mkdir AppHost && mv apphost.cs apphost.run.json AppHost", _counter);
+        await _auto.RunCommandAsync("aspire config set appHost.path AppHost/apphost.cs", _counter);
+    }
+
     public async Task CreateProjectWithConsentAsync(bool accept)
     {
         await _auto.TypeAsync(NewCommand);
