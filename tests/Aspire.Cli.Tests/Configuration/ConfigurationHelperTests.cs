@@ -357,6 +357,88 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RegisterSettingsFiles_NormalizesCompletePathsAcrossCaseEquivalentSections(bool persistNormalization)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var settingsPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string original = """
+            {
+              "DOCS": {
+                "custom": "local",
+                "API": { "other": "preserved" },
+                "api": { "flag": null }
+              },
+              "docs": {
+                "api": { "SITEMAPURL": "nested", "OBJECT": null }
+              },
+              "section": { "NODE": null },
+              "SECTION": { "node": { "value": "nested" } },
+              "docs:api:sitemapUrl": "flat",
+              "DOCS:API:flag": true,
+              "DOCS:API:OBJECT": { "enabled": true },
+              "docs:api:object:enabled": false,
+              "section:node": { "value": "flat" }
+            }
+            """;
+        await File.WriteAllTextAsync(settingsPath, original);
+        var globalSettingsFile = new FileInfo(Path.Combine(workspace.Path, "global-settings.json"));
+        using var configuration = new ConfigurationManager();
+
+        ConfigurationHelper.RegisterSettingsFiles(configuration, workspace.WorkspaceRoot, globalSettingsFile, persistNormalization);
+
+        Assert.Equal("local", configuration["docs:custom"]);
+        Assert.Equal("preserved", configuration["docs:api:other"]);
+        Assert.Equal("nested", configuration["docs:api:sitemapUrl"]);
+        Assert.True(configuration.GetValue<bool>("docs:api:flag"));
+        Assert.True(configuration.GetValue<bool>("docs:api:object:enabled"));
+        Assert.Equal("nested", configuration["section:node:value"]);
+        var persisted = await File.ReadAllTextAsync(settingsPath);
+        if (persistNormalization)
+        {
+            await Verify(persisted, "json").UseParameters(persistNormalization);
+        }
+        else
+        {
+            Assert.Equal(original, persisted);
+        }
+    }
+
+    [Theory]
+    [InlineData(1_000)]
+    [InlineData(100_000)]
+    public void NormalizeSettings_LargeSplitSectionsPreserveNestedValues(int propertyCount)
+    {
+        var nested = new JsonObject();
+        var settings = new JsonObject
+        {
+            ["DOCS"] = new JsonObject { ["custom"] = "preserved" },
+            ["docs"] = new JsonObject { ["api"] = nested }
+        };
+        for (var i = 0; i < propertyCount; i++)
+        {
+            nested.Add($"k{i}", i);
+            settings.Add($"docs:api:k{i}", -i - 1);
+        }
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(settings.ToJsonString()), 1, 4 * 1024 * 1024);
+        var started = Stopwatch.GetTimestamp();
+
+        Assert.True(ConfigurationHelper.NormalizeSettings(settings));
+
+        var elapsed = Stopwatch.GetElapsedTime(started);
+        outputHelper.WriteLine($"Normalized {propertyCount:N0} split-section collisions in {elapsed.TotalMilliseconds:N1} ms.");
+        Assert.Equal(["DOCS", "docs"], settings.Select(property => property.Key));
+        Assert.Equal("preserved", Assert.Single(settings["DOCS"]!.AsObject()).Value!.GetValue<string>());
+        Assert.Equal(propertyCount, nested.Count);
+        for (var i = 0; i < propertyCount; i++)
+        {
+            Assert.Equal(i, nested[$"k{i}"]!.GetValue<int>());
+        }
+        Assert.False(ConfigurationHelper.NormalizeSettings(settings));
+    }
+
+    [Theory]
     [InlineData("""{"DOCS":{"API":{"SITEMAPURL":"nested"}},"docs:api:other":"flat","docs:api:sitemapUrl":"flat"}""", "nested")]
     [InlineData("""{"DOCS":{"API":{"SITEMAPURL":null}},"docs:api:other":"flat","docs:api:sitemapUrl":"flat"}""", "flat")]
     public void NormalizeSettings_MergesMixedCaseSegmentsAndPreservesNestedPrecedence(string json, string expectedValue)
@@ -373,6 +455,39 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedValue, api["SITEMAPURL"]!.GetValue<string>());
         Assert.Equal("flat", api["other"]!.GetValue<string>());
         Assert.False(ConfigurationHelper.NormalizeSettings(settings));
+    }
+
+    [Fact]
+    public async Task NormalizeSettings_PreservesParentCreationAndBlockedPaths()
+    {
+        var settings = JsonNode.Parse("""
+            {
+              "DOCS": null,
+              "docs": { "keep": 1 },
+              "docs:new": 2,
+              "scalar": 7,
+              "SCALAR": { "existing": true },
+              "scalar:new": 9,
+              "array": [1, 2],
+              "array:new": 3,
+              "emptyParent": { "": { "VALUE": null } },
+              "emptyParent::value": true,
+              ":leading": 4,
+              "trailing:": 5,
+              "repeated::leaf": 6,
+              "fresh": null,
+              "fresh:branch:leaf": 7,
+              "fresh:object": { "enabled": true }
+            }
+            """)!.AsObject();
+        var flatObject = settings["fresh:object"];
+
+        Assert.True(ConfigurationHelper.NormalizeSettings(settings));
+
+        Assert.NotSame(flatObject, settings["fresh"]!["object"]);
+        Assert.Null(flatObject!.Parent);
+        Assert.False(ConfigurationHelper.NormalizeSettings(settings));
+        await Verify(settings.ToJsonString(), "json");
     }
 
     [Fact]

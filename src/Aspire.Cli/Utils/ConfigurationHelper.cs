@@ -425,20 +425,13 @@ internal static class ConfigurationHelper
 
     internal static bool NormalizeSettings(JsonObject settings)
     {
-        // Find all colon-separated keys at root level
-        var colonKeys = new List<(string key, JsonNode? value)>();
+        // Clone up front to preserve JSON types without reusing the caller's flat nodes.
+        var colonKeys = settings
+            .Where(static property => property.Key.Contains(':'))
+            .Select(static property => (property.Key, Value: property.Value?.DeepClone()))
+            .ToArray();
 
-        foreach (var kvp in settings)
-        {
-            if (kvp.Key.Contains(':'))
-            {
-                // DeepClone preserves the original JSON type (boolean, number, etc.)
-                // instead of converting to string via ToString().
-                colonKeys.Add((kvp.Key, kvp.Value?.DeepClone()));
-            }
-        }
-
-        if (colonKeys.Count == 0)
+        if (colonKeys.Length == 0)
         {
             return false;
         }
@@ -475,56 +468,73 @@ internal static class ConfigurationHelper
             return key;
         }
 
+        // For {"DOCS":{"custom":"local"},"docs":{"api":{"sitemapUrl":"nested"}}},
+        // the complete docs:api:sitemapUrl path belongs to the second section.
+        var propertiesByPath = new Dictionary<string, SettingsProperty>(StringComparer.OrdinalIgnoreCase);
+        void IndexProperties(JsonObject obj, string? prefix)
+        {
+            foreach (var property in obj)
+            {
+                var path = prefix is null ? property.Key : $"{prefix}:{property.Key}";
+                if (!propertiesByPath.TryGetValue(path, out var existing)
+                    || (existing.Parent[existing.Key] is null && property.Value is not null))
+                {
+                    propertiesByPath[path] = new SettingsProperty(obj, property.Key);
+                }
+                if (property.Value is JsonObject section)
+                {
+                    IndexProperties(section, path);
+                }
+            }
+        }
+        SettingsProperty? ResolveProperty(string path)
+        {
+            if (propertiesByPath.TryGetValue(path, out var existing))
+            {
+                return existing;
+            }
+
+            // Keep the first matching segment when creating a previously absent path.
+            var parts = path.Split(':');
+            var parent = settings;
+            for (var i = 0; i < parts.Length - 1; i++)
+            {
+                var key = GetKey(parent, parts[i]);
+                var child = parent[key];
+                if (child is null)
+                {
+                    child = new JsonObject();
+                    parent[key] = child;
+                }
+                if (child is not JsonObject section)
+                {
+                    return null;
+                }
+                parent = section;
+            }
+
+            return new SettingsProperty(parent, GetKey(parent, parts[^1]));
+        }
+
+        IndexProperties(settings, prefix: null);
         foreach (var (key, value) in colonKeys)
         {
-            // Convert "a:b:c" to nested {"a": {"b": {"c": value}}}.
-            // Match existing casing so "DOCS" and "docs:api:sitemapUrl" merge into
-            // one section, consistent with case-insensitive configuration lookup.
-            var parts = key.Split(':');
-            var currentObject = settings;
-            var pathConflict = false;
-
-            // Walk all but the last segment, creating objects as needed.
-            for (int i = 0; i < parts.Length - 1; i++)
-            {
-                var part = GetKey(currentObject, parts[i]);
-
-                if (!currentObject.ContainsKey(part) || currentObject[part] is null)
-                {
-                    currentObject[part] = new JsonObject();
-                }
-                else if (currentObject[part] is JsonObject)
-                {
-                    currentObject = currentObject[part]!.AsObject();
-                    continue;
-                }
-                else
-                {
-                    // Existing non-object value conflicts with the desired nested structure.
-                    // Prefer the existing nested value and drop the flat key.
-                    pathConflict = true;
-                    break;
-                }
-
-                currentObject = currentObject[part]!.AsObject();
-            }
-
-            if (pathConflict)
+            if (ResolveProperty(key) is not { } property || property.Parent[property.Key] is not null)
             {
                 continue;
             }
 
-            var finalKey = GetKey(currentObject, parts[^1]);
-
-            // If the final key already exists, keep its value and drop the flat key.
-            if (currentObject.ContainsKey(finalKey) && currentObject[finalKey] is not null)
+            property.Parent[property.Key] = value;
+            propertiesByPath[key] = property;
+            if (value is JsonObject section)
             {
-                continue;
+                // Later flat keys must also respect nested values introduced by this object.
+                IndexProperties(section, key);
             }
-
-            currentObject[finalKey] = value;
         }
 
         return true;
     }
+
+    private readonly record struct SettingsProperty(JsonObject Parent, string Key);
 }
