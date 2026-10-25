@@ -253,6 +253,7 @@ function notifyProgramStatus(state) {
             terminalId: state.id,
             generation: state.generation,
             hasStatus: state.hasProgramStatus,
+            statusEpoch: state.statusEpoch,
             records: state.programStatus.records,
         };
         const json = JSON.stringify(snapshot);
@@ -913,6 +914,7 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         workingDirectoryUri: null,
         progress: { state: "none", percentage: null },
         programStatus: { records: [] },
+        statusEpoch: options.statusEpoch ?? 0,
         hasProgramStatus: false,
         programStatusFrame: null,
         lastProgramStatusJson: null,
@@ -1008,7 +1010,7 @@ export function restartTerminal(id) {
     reconnectTerminal(id, state.wsUrl);
 }
 
-export function reconnectTerminal(id, wsUrl, autoFit) {
+export function reconnectTerminal(id, wsUrl, autoFit, statusEpoch) {
     const state = terminals.get(id);
     if (!state || (state.ended && state.wsUrl === wsUrl)) {
         return state?.generation ?? 0;
@@ -1017,6 +1019,9 @@ export function reconnectTerminal(id, wsUrl, autoFit) {
     // later interop update could otherwise resize an explicitly configured grid.
     if (autoFit !== undefined) {
         state.autoFit = autoFit;
+    }
+    if (statusEpoch !== undefined) {
+        state.statusEpoch = statusEpoch;
     }
     if (state.wsUrl !== wsUrl) {
         releaseRetainedClient(state);

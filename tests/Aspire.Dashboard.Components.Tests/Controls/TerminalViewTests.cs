@@ -190,8 +190,40 @@ public class TerminalViewTests : DashboardTestContext
         await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
         await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with { TerminalId = 99, Generation = 2 }));
         Assert.Empty(cut.FindAll(".terminal-status-toggle"));
-        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with { Generation = 2 }));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with { Generation = 2, StatusEpoch = 1 }));
         Assert.Single(cut.FindAll(".terminal-status-panel"));
+    }
+
+    [Fact]
+    public async Task ProgramStatus_RebindingRejectsQueuedCallbacksBeforeInteropCompletes()
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "first"));
+        var reconnect = module.Setup<int>("reconnectTerminal", _ => true);
+        var status = new TerminalProgramStatus
+        {
+            TerminalId = 1, Generation = 1, HasStatus = true,
+            Records = [new() { Id = "", State = "working", Title = "Old endpoint" }]
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status));
+        cut.Render(builder => builder.Add(p => p.ResourceName, "second"));
+        cut.WaitForAssertion(() => Assert.Single(module.Invocations, i => i.Identifier == "reconnectTerminal"));
+
+        // Old callbacks can have a newer reconnect generation, but still belong to the old endpoint.
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with { Generation = 50 }));
+        Assert.Empty(cut.FindAll(".terminal-status-toggle"));
+        reconnect.SetResult(2);
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with
+        {
+            StatusEpoch = 1, Generation = 2, HasStatus = false, Records = []
+        }));
+        Assert.Empty(cut.FindAll(".terminal-status-toggle"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalProgramStatusChanged(status with
+        {
+            StatusEpoch = 1, Generation = 2, Records = [new() { Id = "", State = "done", Title = "New endpoint" }]
+        }));
+        Assert.Equal("New endpoint", cut.Find(".terminal-status-title").TextContent);
     }
 
     [Fact]

@@ -46,6 +46,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private IReadOnlyList<TerminalProgramStatusNode> _programStatusNodes = [];
     private bool _hasProgramStatus;
     private bool _showProgramStatus;
+    private int _programStatusEpoch;
 
     /// <summary>Gets or sets the unique instance name of the resource that owns the terminal.</summary>
     [Parameter]
@@ -245,6 +246,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 AutoFit = autoFit,
                 SizeMemoryKey = SizeMemoryKey,
                 InitialFontSize = InitialFontSize,
+                StatusEpoch = _programStatusEpoch,
                 Label = Loc[nameof(Resources.TerminalStrings.TerminalInputLabel)],
             }, _selectionTemplateElement, _footerElement);
         _appliedReadOnly = readOnly;
@@ -277,6 +279,12 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
         if (!string.Equals(newEndpoint, _connectedEndpoint, StringComparison.Ordinal))
         {
+            // Invalidate already queued callbacks before reconnect interop yields. Generations
+            // alone cannot identify the endpoint while JS is still returning the new generation.
+            if (_connectedEndpoint is not null)
+            {
+                _programStatusEpoch++;
+            }
             _hasProgramStatus = false;
             _showProgramStatus = false;
             _programStatusNodes = [];
@@ -313,7 +321,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             {
                 var autoFit = AutoFit;
                 var generation = await _jsModule!.InvokeAsync<int>(
-                    "reconnectTerminal", _terminalId, BuildWebSocketUrl(newEndpoint), autoFit);
+                    "reconnectTerminal", _terminalId, BuildWebSocketUrl(newEndpoint), autoFit, _programStatusEpoch);
                 _appliedAutoFit = autoFit;
                 _connectedGeneration = Math.Max(_connectedGeneration, generation);
             }
@@ -372,7 +380,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [JSInvokable]
     public void OnTerminalProgramStatusChanged(TerminalProgramStatus status)
     {
-        if (_disposed || (_terminalId != 0 && status.TerminalId != _terminalId) ||
+        if (_disposed || status.StatusEpoch != _programStatusEpoch ||
+            (_terminalId != 0 && status.TerminalId != _terminalId) ||
             (_terminalId == 0 && _initializationTask is not { IsCompleted: false }) ||
             status.Generation < _connectedGeneration)
         {
@@ -590,6 +599,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 /// <summary>Options serialized to the JS adapter using camelCase property names.</summary>
 public sealed record TerminalViewOptions
 {
+    public int StatusEpoch { get; init; }
     /// <summary>Whether application input is blocked.</summary>
     public bool ReadOnly { get; init; }
     /// <summary>Whether fixed-resolution presets are offered.</summary>

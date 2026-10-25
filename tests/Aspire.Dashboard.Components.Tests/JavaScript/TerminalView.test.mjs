@@ -314,7 +314,7 @@ test("program status is delivered before mount resolves and coalesces the latest
     attempts[0].options.onProgramStatusChange(first);
     attempts[0].options.onProgramStatusChange(latest);
     await settle();
-    assert.deepEqual(programStatuses, [{ terminalId: id, generation: 1, hasStatus: true, records: latest.records }]);
+    assert.deepEqual(programStatuses, [{ terminalId: id, generation: 1, hasStatus: true, statusEpoch: 0, records: latest.records }]);
     assert.equal(attempts[0].client.disposed, false);
 
     attempts[0].options.onProgramStatusChange(latest);
@@ -347,7 +347,7 @@ test("program status survives same-terminal reconnect and rejects old mount call
     terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=app-instance-1");
     attempts[0].options.onProgramStatusChange({ records: [] });
     await settle();
-    assert.deepEqual(programStatuses.at(-1), { terminalId: id, generation: 2, hasStatus: true, records });
+    assert.deepEqual(programStatuses.at(-1), { terminalId: id, generation: 2, hasStatus: true, statusEpoch: 0, records });
     attempts[1].options.onProgramStatusChange({ records: [] });
     await settle();
     assert.deepEqual(programStatuses.at(-1).records, []);
@@ -358,9 +358,9 @@ test("rebinding to another endpoint resets the inventory and first observation",
     const { id } = mount();
     attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "error" }] });
     await settle();
-    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other");
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other", false, 1);
     await settle();
-    assert.deepEqual(programStatuses.at(-1), { terminalId: id, generation: 2, hasStatus: false, records: [] });
+    assert.deepEqual(programStatuses.at(-1), { terminalId: id, generation: 2, hasStatus: false, statusEpoch: 1, records: [] });
 });
 
 test("disposal cancels queued status delivery and ignores further reports", async () => {

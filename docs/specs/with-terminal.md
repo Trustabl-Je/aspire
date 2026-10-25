@@ -68,6 +68,11 @@ not reconnect or stop the process, and terminals without program status have no
 status panel or status button. The inventory is current state, not event history;
 it is independent of OSC 9;4 progress and OSC 133 shell integration.
 
+The Dashboard circuit accepts bounded messages up to 4 MiB so a complete OSC 7501
+inventory (up to 256 records, including 2 KiB messages) can cross JS interop with
+JSON escaping overhead. Endpoint changes invalidate queued status callbacks before
+reconnecting, so a previous terminal cannot reopen the panel on a new terminal.
+
 The `terminal-features` resource in `playground/Terminals` demonstrates reports,
 nested updates, subtree clearing, and complete inventory clearing. It includes
 96 regional tasks with long titles and an eight-level path for testing vertical

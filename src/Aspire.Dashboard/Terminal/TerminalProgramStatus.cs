@@ -10,6 +10,7 @@ public sealed record TerminalProgramStatus
 {
     public int TerminalId { get; init; }
     public int Generation { get; init; }
+    public int StatusEpoch { get; init; }
     public bool HasStatus { get; init; }
     public IReadOnlyList<TerminalProgramStatusRecord> Records { get; init; } = [];
 }
