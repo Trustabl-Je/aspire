@@ -13,7 +13,6 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -180,28 +179,12 @@ internal sealed class UpdateCommand : BaseCommand
         var directory = requestedFile is null ? ExecutionContext.WorkingDirectory
             : Directory.Exists(requestedFile.FullName) ? new DirectoryInfo(requestedFile.FullName) : requestedFile.Directory!;
         var configuredFile = requestedFile ?? await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
-        var path = Path.Combine(directory.FullName, AspireConfigFile.FileName);
-        if (requestedFile is null)
-        {
-            var configuration = AspireConfigFile.Load(directory.FullName);
-            // Solution-mode init owns the root config even when its AppHost is in a
-            // child directory. Match the saved identity rather than inheriting a binding.
-            var ownsConfiguredProject = configuredFile is null ||
-                configuration?.AppHost?.Path is { } appHostPath &&
-                ProjectLocator.IsSamePersistedAppHostPath(
-                    PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(directory.FullName, appHostPath)),
-                    configuredFile.FullName);
-            if (ownsConfiguredProject && await ConfigSources.ReadBindingAsync(path, cancellationToken) is not null)
-            {
-                return directory;
-            }
-        }
         if (configuredFile is not null && !Directory.Exists(configuredFile.FullName))
         {
             return configuredFile.Directory!;
         }
         // Explicit directory targets must discover their AppHost first. Config-only
-        // refresh can use a binding in this directory, but never inherit one.
+        // refresh can use bindings in this directory and its ancestors.
         try
         {
             var selectedFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(configuredFile, createSettingsFile: false, cancellationToken);

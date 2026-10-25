@@ -29,10 +29,10 @@ internal sealed class ConfigSourceService(
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
     private static readonly string[][] s_allowedSettings = [["docs", "llmsTxtUrl"], ["docs", "api", "sitemapUrl"]];
-    private ConfigSourceSnapshot? _snapshot;
+    private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
     private bool _projectChecked;
-    private (string Message, string? GitOutput)? _notification;
+    private readonly List<(string Message, string? GitOutput)> _notifications = [];
     private readonly Lock _checksLock = new();
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
@@ -45,7 +45,7 @@ internal sealed class ConfigSourceService(
     };
 
     /// <summary>
-    /// Checks the resolved project's saved configuration source for updates without applying changes.
+    /// Checks saved configuration sources in the resolved project directory and its ancestors without applying changes.
     /// Runs in the background and defers advisory messages until command exit.
     /// </summary>
     /// <param name="projectDirectory">The directory of the project already resolved by the caller.</param>
@@ -103,13 +103,13 @@ internal sealed class ConfigSourceService(
 
     public void NotifyIfUpdateAvailable()
     {
-        (string Message, string? GitOutput)? notification;
+        (string Message, string? GitOutput)[] notifications;
         lock (_checksLock)
         {
-            notification = _notification;
-            _notification = null;
+            notifications = _notifications.ToArray();
+            _notifications.Clear();
         }
-        if (notification is { } pending)
+        foreach (var pending in notifications)
         {
             interaction.DisplayMessage(KnownEmojis.Warning, pending.Message, consoleOverride: ConsoleOutput.Error);
             DisplayGitTimeoutOutput(interaction, pending.GitOutput);
@@ -278,34 +278,51 @@ internal sealed class ConfigSourceService(
                 }
                 _projectChecked = true;
             }
-            // Bindings are not inherited. Only update/check the file that declares
-            // the source; its materialized settings still inherit through normal lookup.
-            var configPath = Path.Combine(directory.FullName, AspireConfigFile.FileName);
-            var source = await ReadBindingAsync(configPath, cancellationToken);
-            if (source is null)
+            var foundBinding = false;
+            var refreshedSources = new HashSet<ConfigSourceIdentity>();
+            var sources = new List<ConfigSource>();
+            // Walk nearest-first and await each source: Git can share the terminal and
+            // request input, so distinct sources must not fetch or prompt in parallel.
+            for (DirectoryInfo? current = directory; current is not null; current = current.Parent)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                var configPath = Path.Combine(current.FullName, AspireConfigFile.FileName);
+                var source = await ReadBindingAsync(configPath, cancellationToken);
+                if (source is null)
+                {
+                    continue;
+                }
+                foundBinding = true;
+                var identity = new ConfigSourceIdentity(source.Repository, source.Path, source.Ref);
                 if (force)
                 {
-                    throw new ConfigSourceException(ConfigSourceStrings.NoBinding);
+                    var snapshot = await AcquireAsync(source, force: refreshedSources.Add(identity), cancellationToken);
+                    await ApplySnapshotAsync(source, snapshot, current, cancellationToken);
                 }
-                return;
-            }
-            if (force)
-            {
-                var snapshot = await AcquireAsync(source, force: true, cancellationToken);
-                await ApplySnapshotAsync(source, snapshot, new DirectoryInfo(Path.GetDirectoryName(configPath)!), cancellationToken);
-            }
-            else if (string.IsNullOrEmpty(source.AppliedVersion))
-            {
-                ReportOnce(ConfigSourceStrings.AppliedVersionMissing);
-            }
-            else
-            {
-                var observed = await CheckVersionAsync(source, cancellationToken);
-                if (observed.Version != source.AppliedVersion)
+                else
                 {
-                    ReportOnce(ConfigSourceStrings.UpdateAvailable);
+                    sources.Add(source);
                 }
+            }
+            foreach (var group in sources.GroupBy(source => new ConfigSourceIdentity(source.Repository, source.Path, source.Ref)))
+            {
+                if (group.Any(source => string.IsNullOrEmpty(source.AppliedVersion)))
+                {
+                    ReportOnce(ConfigSourceStrings.AppliedVersionMissing);
+                }
+                var versionedSources = group.Where(source => !string.IsNullOrEmpty(source.AppliedVersion)).ToArray();
+                if (versionedSources.Length > 0)
+                {
+                    var observed = await CheckVersionAsync(versionedSources, cancellationToken);
+                    if (versionedSources.Any(source => observed.Version != source.AppliedVersion))
+                    {
+                        ReportOnce(ConfigSourceStrings.UpdateAvailable);
+                    }
+                }
+            }
+            if (force && !foundBinding)
+            {
+                throw new ConfigSourceException(ConfigSourceStrings.NoBinding);
             }
         }
         catch (Exception ex) when (!force && ex is ConfigSourceException or JsonException or IOException or UnauthorizedAccessException or TimeoutException)
@@ -380,18 +397,12 @@ internal sealed class ConfigSourceService(
     internal async Task<ConfigSourceSnapshot> AcquireAsync(ConfigSource source, bool force, CancellationToken cancellationToken)
     {
         source.Validate();
+        var key = new ConfigSourceIdentity(source.Repository, source.Path, source.Ref);
         lock (_checksLock)
         {
-            if (_snapshot is { } existing)
+            if (!force && _snapshots.TryGetValue(key, out var existing))
             {
-                if (!ConfigSource.HasSameIdentity(existing.Metadata.Source, source))
-                {
-                    throw new InvalidOperationException("A configuration source service instance cannot be used for multiple configuration sources.");
-                }
-                if (!force)
-                {
-                    return existing;
-                }
+                return existing;
             }
         }
 
@@ -429,7 +440,7 @@ internal sealed class ConfigSourceService(
             published = true;
             lock (_checksLock)
             {
-                _snapshot = snapshot;
+                _snapshots[key] = snapshot;
             }
             // Callers retain configuration in memory. After publication, older snapshots
             // can be removed while the cache lock excludes other acquisitions.
@@ -459,8 +470,9 @@ internal sealed class ConfigSourceService(
         }
     }
 
-    private async Task<ConfigSourceCheckMetadata> CheckVersionAsync(ConfigSource source, CancellationToken cancellationToken)
+    private async Task<ConfigSourceCheckMetadata> CheckVersionAsync(IReadOnlyList<ConfigSource> sources, CancellationToken cancellationToken)
     {
+        var source = sources[0];
         var cacheDirectory = GetCacheDirectory(source);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.GetDirectoryName(cacheDirectory)!);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheDirectory);
@@ -479,7 +491,7 @@ internal sealed class ConfigSourceService(
             // A different app can have applied a version newer than this shared observation.
             // Reuse a mismatch only when that applied version was actually checked against it.
             if (age >= TimeSpan.Zero && age < TimeSpan.FromHours(24)
-                && (previous.Version == source.AppliedVersion || previous.ComparedAppliedVersion == source.AppliedVersion))
+                && sources.All(binding => previous.Version == binding.AppliedVersion || previous.ComparedAppliedVersion == binding.AppliedVersion))
             {
                 return previous;
             }
@@ -514,7 +526,10 @@ internal sealed class ConfigSourceService(
     {
         lock (_checksLock)
         {
-            _notification ??= (message, gitOutput);
+            if (!_notifications.Contains((message, gitOutput)))
+            {
+                _notifications.Add((message, gitOutput));
+            }
         }
     }
 
@@ -582,4 +597,5 @@ internal sealed class ConfigSourceService(
         current[GetKey(current, path[^1])] = value?.DeepClone();
     }
 
+    private readonly record struct ConfigSourceIdentity(string Repository, string Path, string? Ref);
 }

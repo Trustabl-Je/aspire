@@ -77,4 +77,31 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
             await context.RefreshConfigurationAsync(expectChanges: false);
             await context.AssertConfigurationUnchangedAsync(original);
         });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task Run_NotifiesWhenAncestorConfigurationSourceUpdateIsAvailable()
+        => ConfigSourceTestContext.RunAsync(output, async context =>
+        {
+            await context.CreateProjectAsync();
+            var original = await context.AssertSourceAppliedAsync("original");
+            await context.UseAppHostDirectoryAsync();
+            await context.UpdateSourceAsync();
+            await context.RunAndAssertUpdateNotificationAsync();
+            await context.AssertConfigurationUnchangedAsync(original);
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task Update_ConfigSourceRefreshesAncestorConfiguration()
+        => ConfigSourceTestContext.RunAsync(output, async context =>
+        {
+            await context.CreateProjectAsync();
+            var original = await context.AssertSourceAppliedAsync("original");
+            await context.UseAppHostDirectoryAsync();
+            await context.UpdateSourceAsync();
+            await context.RefreshConfigurationAsync(expectChanges: true);
+            await context.AssertConfigurationUpdatedAsync(original);
+            await context.AssertNoLocalConfigurationAsync();
+        });
 }

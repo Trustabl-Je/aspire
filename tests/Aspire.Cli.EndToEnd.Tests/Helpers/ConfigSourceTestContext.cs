@@ -141,6 +141,19 @@ internal sealed class ConfigSourceTestContext
         Assert.NotEqual(previousVersion, await ReadSourceVersionAsync());
     }
 
+    public async Task UseAppHostDirectoryAsync()
+    {
+        var configuration = await ReadConfigurationAsync();
+        var appHostPath = configuration["appHost"]!["path"]!.GetValue<string>();
+        var directory = Path.GetDirectoryName(appHostPath)!.Replace('\\', '/');
+        Assert.NotEmpty(directory);
+        await _auto.RunCommandAsync($"cd \"{directory}\"", _counter);
+        await AssertNoLocalConfigurationAsync();
+    }
+
+    public Task AssertNoLocalConfigurationAsync()
+        => _auto.RunCommandAsync("test ! -f aspire.config.json", _counter);
+
     public async Task RunAndAssertUpdateNotificationAsync()
     {
         // Creation records a fresh successful check. Expire only this isolated source's
@@ -212,7 +225,7 @@ internal sealed class ConfigSourceTestContext
     {
         // Source materialization creates an owner-only file inside the container. Export its
         // contents without changing those permissions so the host can assert the saved values.
-        await _auto.RunCommandAsync("cat aspire.config.json > \"$ASPIRE_E2E_WORKSPACE/actual-config.json\"", _counter);
+        await _auto.RunCommandAsync("cat \"$ASPIRE_E2E_WORKSPACE/SourceApp/aspire.config.json\" > \"$ASPIRE_E2E_WORKSPACE/actual-config.json\"", _counter);
         return JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_root, "actual-config.json"), _cancellationToken))!.AsObject();
     }
 

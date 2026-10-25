@@ -13,7 +13,7 @@ This specification focuses on the first phase. Content acquisition is summarized
 
 The application's `aspire.config.json` is the runtime configuration, including values previously copied from a source. Normal CLI configuration precedence and explicit parent-setting inheritance continue to apply. The source is not an additional runtime configuration provider, and ordinary commands never load the cached source JSON to supply settings.
 
-The `configSource` binding itself is not inherited. Source checks and explicit refresh use only the binding in the selected project's own `aspire.config.json` and update only that file. A child project without its own binding does not check or refresh a parent's source. Values materialized into the parent configuration continue to inherit through normal settings lookup.
+The `configSource` binding itself is not copied or inherited into a child configuration. Source checks and explicit refresh inspect `aspire.config.json` in the selected project's directory and every ancestor up to the filesystem root, including ancestors outside the Git repository. Each binding belongs to the file that declares it, and refresh updates that file only. Values materialized into parent configurations continue to inherit through normal settings lookup.
 
 Source-driven writes to the app configuration and the user-directory tracking copy happen only during initial materialization by `aspire new` or `aspire init`, or an explicit `aspire update --config-source`. Other commands may check for updates and report their availability, but must not apply them. This restriction does not prohibit explicit local configuration edits or a command's unrelated project bookkeeping.
 
@@ -89,7 +89,7 @@ The choice applies to the project being created or initialized, not every projec
 
 In C# solution mode, `aspire init` explicitly manages `aspire.config.json` in the solution directory for source selection, advisory checks, and materialization. An existing solution-root binding is reused without renewed consent or reapplying source values, even when the initialization environment proposes another source. Initialization does not create a second source binding in the generated AppHost directory. This is explicit configuration-file selection, not inheritance of the source binding. File-based and polyglot initialization use the working-directory configuration.
 
-When run from that solution directory without `--apphost`, `aspire update --config-source` refreshes the root binding if the root configuration's `appHost.path` identifies the configured AppHost. An explicit AppHost file or directory still selects that project's own binding instead; it does not inherit the solution-root binding.
+Whether selected implicitly or with an explicit AppHost file or directory, `aspire update --config-source` starts at the selected AppHost directory and refreshes bound configuration files there and in every ancestor, including the solution-root binding. Ancestor bindings do not need to identify the AppHost through `appHost.path`.
 
 Other commands, including standalone `aspire agent init` and `aspire add`, do not prompt to enable a source. Without a saved project `configSource`, they ignore the initialization-source environment variables and employee default.
 
@@ -189,20 +189,20 @@ Missing `configSource.repository` or `configSource.path` must not prevent genera
 
 ### Check for updates without applying them
 
-For a source-bound app, operations that resolve an Aspire project or select a running AppHost explicitly check that project's source for a newer version. Initialization of an already-bound project also checks the resolved project directory. Commands that do not resolve a project, such as agent setup, configuration inspection, and documentation lookup, do not perform an ambient source check. Agent setup targets an agent workspace, which is not necessarily the AppHost directory. The check is advisory: the requested operation uses the app's saved configuration whether the source is newer, unavailable, or has never been fetched on this machine.
+Operations that resolve an Aspire project or select a running AppHost check saved sources in that project's directory and every ancestor for newer versions. Initialization of an already-bound project also checks the resolved project directory and its ancestors. Commands that do not resolve a project, such as agent setup, configuration inspection, and documentation lookup, do not perform an ambient source check. Agent setup targets an agent workspace, which is not necessarily the AppHost directory. The check is advisory: the requested operation uses the app's saved configuration whether a source is newer, unavailable, or has never been fetched on this machine.
 
 Advisory checks run in the background without delaying project operations or prompting for Git credentials. At command exit, unfinished checks are cancelled and their child processes are cleaned up. Completed update notices and advisory warnings are displayed after the CLI version update notification, never concurrently with command output; machine-readable invocations suppress these notices. A fast command may exit before a check produces a result, in which case no notice is shown. Explicit `aspire update --config-source` remains a synchronous fetch-and-apply operation, including its normal credential prompts and failure reporting.
 
-Each configuration-source service instance handles one project and one source. Repeated calls for the same project reuse a single background check; attempting to reuse the instance for another project is an error.
+Each configuration-source service instance handles one project and its ancestor sources. Repeated calls for the same project reuse a single background check; attempting to reuse the instance for another project is an error. Sources are processed serially in nearest-first order, never in parallel, so Git terminal output and authentication input cannot compete between sources. Bindings with identical repository, file path, and ref share one version check or acquisition per invocation, regardless of their applied versions. Compare the shared observation against each binding's applied version; reuse cached check metadata only when it is valid for all those versions.
 
 Directory cleanup failures are logged at debug level without displaying a UI warning or replacing the check's notification.
 
 | Command scope | Source behavior |
 |---|---|
 | `aspire new` / `aspire init` initially creating source-bound app configuration | After consent, fetch, validate, and materialize allowed values; save the binding, applied version, and tracking copy |
-| `aspire update --config-source` | Fetch and explicitly apply allowed values, regardless of check age |
+| `aspire update --config-source` | Fetch and explicitly apply allowed values to every bound configuration in the project directory and its ancestors, regardless of check age |
 | Other commands scoped to an existing source-bound app, including re-running initialization on an already-bound app | Check for updates when due; never apply source values or rewrite the fetched tracking copy |
-| Commands scoped to an app without `configSource` | No source check or acquisition |
+| Commands scoped to an app without any local or ancestor `configSource` | No source check or acquisition |
 | Global commands not scoped to an app, help, and completion | No source check or acquisition |
 
 Compare the selected-file version at the binding's branch or commit with the application's `configSource.appliedVersion`, not with another app's latest fetch. The version identifies the selected file's contents, such as its Git blob identity; unrelated commits to other files do not constitute a configuration update.
@@ -230,7 +230,7 @@ A new version of this project's configuration source is available.
 Run `aspire update --config-source` to apply it.
 ```
 
-Emit availability notices and check failures once per selected source per invocation on stderr, preserving machine-readable stdout. Report authentication, network, missing-file, and tracking errors explicitly and safely; do not report a failed check as "up to date" or advance its successful-check time. Advisory failure does not change the requested operation's exit code; its own success/failure still determines that code.
+Emit distinct availability notices and check failures once per invocation on stderr, preserving machine-readable stdout. A failure must remain visible even if an earlier source produced an update notice. Stop checking further sources after a failure, but do not fail the requested project operation. Report authentication, network, missing-file, and tracking errors explicitly and safely; do not report a failed check as "up to date" or advance its successful-check time. Advisory failure does not change the requested operation's exit code; its own success/failure still determines that code.
 
 A known newer version can be reported on later invocations within the check interval without another network check. No background timer applies settings. In particular, offline or unauthorized checks must not cause the CLI to substitute standard configuration, load cached defaults, or discard the app's saved values.
 
@@ -245,9 +245,10 @@ aspire update --config-source --apphost MyApp.AppHost.csproj
 
 This is a configuration-update mode of `aspire update`, separate from its package-update workflow:
 
-- Resolve the project using the existing project-selection behavior, including `--apphost`, and use its saved `configSource`. Do not select a source from environment variables or employee detection. If the project has no saved source, report an error and exit nonzero without Git acquisition.
-- When `--apphost` names a directory, discover and select an AppHost within that directory before considering a configuration-only fallback in the requested directory. If discovery finds no AppHost, retain that fallback without inheriting ancestor bindings; discovery ambiguity or unsupported-project errors must not silently select another binding.
-- Acquire the saved branch's current commit, the saved exact commit, or the repository's current default branch when the binding has no ref, even when a recent check found no update. Validate it, merge only supplied allowlisted values into the selected app file, and save its applied version with those values.
+- Resolve the project using the existing project-selection behavior, including `--apphost`, and process saved bindings in its directory and every ancestor up to the filesystem root, nearest first. Do not select a source from environment variables or employee detection. If no configuration in that chain has a saved source, report an error and exit nonzero without Git acquisition.
+- When `--apphost` names a directory, discover and select an AppHost within that directory before considering a configuration-only fallback in the requested directory. If discovery finds no AppHost, inspect that fallback directory and its ancestors; discovery ambiguity or unsupported-project errors must not silently select another binding.
+- Acquire the saved branch's current commit, the saved exact commit, or the repository's current default branch when the binding has no ref, even when a recent check found no update. Validate it, merge only supplied allowlisted values into each declaring configuration file, and save its applied version with those values. Reuse one acquisition for identical repository/path/ref bindings, preserving each file's unrelated settings independently.
+- Never process sources in parallel. On the first acquisition, validation, or write failure, stop and exit nonzero; preserve earlier successful updates without rolling them back.
 - Publish the fetched source JSON and fetch metadata in Aspire home as tracking data. Record a successful fetch/check time even if the selected file's version is unchanged. If tracking publication fails, report it explicitly; do not use shared tracking as proof that an app was updated.
 - Report the source, resolved commit, and whether the app configuration changed. Make clear that supplied allowlisted values can replace local edits.
 - Do not update the CLI, SDK, or packages, change the binding's repository, path, or ref, regenerate AppHost source or application code, or reinstall content. The app configuration file and its applied-version stamp are intentionally updated. Reject combinations with `--self`, `--migrate`, or channel/package-source overrides. Plain `aspire update` retains its existing package-update behavior and only performs an advisory source check.
