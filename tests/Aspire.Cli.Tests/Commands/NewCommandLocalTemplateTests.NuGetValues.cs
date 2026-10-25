@@ -355,6 +355,7 @@ public partial class NewCommandLocalTemplateTests
         var calls = 0;
         var interaction = new TestInteractionService();
         var services = CreateServices(workspace, interaction, interactive: false);
+        services.AddSingleton(workspace.CreateExecutionContext(identityVersion: "13.6.3"));
         services.AddSingleton<INuGetClient>(new FakeNuGetClient
         {
             GetPackageVersionsCallback = (_, _, _) =>
