@@ -40,7 +40,14 @@ internal sealed class TemplateNuGetConfigService(
     /// requests channel policy, not unconditional file creation: nuget.org-only sources still
     /// use ambient configuration, while custom sources can require a new output-root file.
     /// </remarks>
-    public async Task CreateNuGetConfigIfMissingAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
+    public Task CreateNuGetConfigIfMissingAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
+        => CreateNuGetConfigIfMissingAsync(channel, outputPath, outputPath, cancellationToken);
+
+    /// <summary>
+    /// Creates staged policy using the final output's workload identity, not a temporary path's.
+    /// </summary>
+    internal async Task CreateNuGetConfigIfMissingAsync(
+        PackageChannel channel, string outputPath, string logicalOutputPath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var outputDirectory = new DirectoryInfo(outputPath);
@@ -60,7 +67,7 @@ internal sealed class TemplateNuGetConfigService(
                 throw new ArgumentException(Resources.NewCommandStrings.SourceWithCredentialsCannotBePersisted);
             }
 
-            await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride: null, outputDirectory, cancellationToken);
+            await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride: null, outputDirectory, logicalOutputPath, cancellationToken);
         }
     }
 
@@ -84,7 +91,7 @@ internal sealed class TemplateNuGetConfigService(
             return;
         }
 
-        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride: null, outputDir, cancellationToken);
+        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride: null, outputDir, outputPath, cancellationToken);
         interactionService.DisplayMessage(KnownEmojis.Package, Resources.TemplatingStrings.NuGetConfigCreatedConfirmationMessage);
     }
 
@@ -208,7 +215,7 @@ internal sealed class TemplateNuGetConfigService(
             throw new ArgumentException("Credential-bearing HTTP sources cannot be persisted.", nameof(sourceOverride));
         }
 
-        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride, new DirectoryInfo(outputPath), cancellationToken);
+        await WriteNewAppHostNuGetConfigAsync(channel, sourceOverride, new DirectoryInfo(outputPath), outputPath, cancellationToken);
         return true;
     }
 
@@ -216,6 +223,7 @@ internal sealed class TemplateNuGetConfigService(
         PackageChannel? channel,
         string? sourceOverride,
         DirectoryInfo outputDirectory,
+        string logicalOutputPath,
         CancellationToken cancellationToken)
     {
         outputDirectory.Create();
@@ -228,7 +236,7 @@ internal sealed class TemplateNuGetConfigService(
 
         var configuration = nuGetService.BuildChannelConfiguration(
             outputDirectory,
-            AppHostWorkloadId.Create(outputDirectory.FullName),
+            AppHostWorkloadId.Create(Path.GetFullPath(logicalOutputPath)),
             channel,
             sourceOverride,
             executionContext.NuGetServiceIndexOverride,

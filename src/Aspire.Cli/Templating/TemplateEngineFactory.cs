@@ -8,6 +8,7 @@ using System.Text;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -23,7 +24,7 @@ using Spectre.Console;
 
 namespace Aspire.Cli.Templating;
 
-internal sealed class TemplateEngineFactory(
+internal sealed partial class TemplateEngineFactory(
     CliExecutionContext executionContext,
     IInteractionService interactionService,
     INewCommandPrompter prompter,
@@ -31,6 +32,7 @@ internal sealed class TemplateEngineFactory(
     IGitRunner gitRunner,
     IPackagingService packagingService,
     TemplateNuGetConfigService templateNuGetConfigService,
+    INuGetClient nuGetClient,
     ILogger<TemplateEngineFactory> logger) : ITemplateFactory, IDisposable
 {
     private readonly List<IDisposable> _resources = [];
@@ -195,29 +197,33 @@ internal sealed class TemplateEngineFactory(
     {
         try
         {
-            if (Directory.Exists(path))
-            {
-                // Git object files can be read-only on Windows. Do not follow repository
-                // symlinks while clearing that bit or touch files outside this checkout.
-                foreach (var file in Directory.EnumerateFiles(path, "*", new EnumerationOptions
-                {
-                    RecurseSubdirectories = true,
-                    AttributesToSkip = FileAttributes.ReparsePoint
-                }))
-                {
-                    var attributes = File.GetAttributes(file);
-                    if ((attributes & FileAttributes.ReadOnly) != 0)
-                    {
-                        File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
-                    }
-                }
-
-                Directory.Delete(path, recursive: true);
-            }
+            DeleteTemplateDirectory(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(ex, "Could not delete template checkout {Path}.", path);
+        }
+    }
+
+    private static void DeleteTemplateDirectory(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            // Git object files can be read-only on Windows. Do not follow repository
+            // symlinks while clearing that bit or touch files outside this directory.
+            foreach (var file in Directory.EnumerateFiles(path, "*", new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                AttributesToSkip = FileAttributes.ReparsePoint
+            }))
+            {
+                var attributes = File.GetAttributes(file);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                {
+                    File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
+                }
+            }
+            Directory.Delete(path, recursive: true);
         }
     }
 
@@ -275,6 +281,7 @@ internal sealed class TemplateEngineFactory(
         }
 
         var parameters = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var computedParameters = hostConfiguration.ValueSources.Keys.ToHashSet(StringComparer.Ordinal);
         PackageChannel? identityChannel = null;
         PackageChannel? templateChannel = null;
         // Root NuGet policy is explicitly requested by the selected host file, independently
@@ -292,9 +299,9 @@ internal sealed class TemplateEngineFactory(
         }
         try
         {
-            var promptState = hostEnvironment.SupportsInteractiveInput && template.ParameterDefinitions.Any(parameter =>
+            var promptState = (hostEnvironment.SupportsInteractiveInput || computedParameters.Count > 0) && template.ParameterDefinitions.Any(parameter =>
                 !string.IsNullOrEmpty(parameter.Precedence.IsEnabledCondition) || !string.IsNullOrEmpty(parameter.Precedence.IsRequiredCondition))
-                ? new TemplateParameterPromptState(settings, template, name, logger)
+                ? new TemplateParameterPromptState(settings, template, name, logger, computedParameters)
                 : null;
             foreach (var parameter in promptState?.Parameters ?? template.ParameterDefinitions)
             {
@@ -311,7 +318,13 @@ internal sealed class TemplateEngineFactory(
                 }
 
                 string? value;
-                if (parameter.Name.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase))
+                if (computedParameters.Contains(parameter.Name))
+                {
+                    // Render valid version-shaped placeholders only in disposable staging.
+                    // The final render always receives the resolved package version instead.
+                    value = "0.0.0";
+                }
+                else if (parameter.Name.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase))
                 {
                     value = executionContext.IdentitySdkVersion;
                 }
@@ -354,6 +367,12 @@ internal sealed class TemplateEngineFactory(
         catch (TemplateAuthoringException ex)
         {
             return CreationFailed(CreationResultStatus.TemplateIssueDetected, ex.Message);
+        }
+
+        if (computedParameters.Any(parameters.ContainsKey))
+        {
+            return await CreateWithComputedValuesAsync(
+                creator, template, name, outputPath, parameters, hostConfiguration, templateChannel, cancellationToken);
         }
 
         // Validate through the engine before it creates the output directory. TemplateCreator

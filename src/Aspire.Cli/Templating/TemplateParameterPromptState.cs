@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 using Microsoft.TemplateEngine.Abstractions;
 using Microsoft.TemplateEngine.Core;
@@ -15,11 +17,15 @@ internal sealed class TemplateParameterPromptState
     private readonly IGenerator _generator;
     private readonly ILogger _logger;
     private readonly Dictionary<string, object> _values = new(StringComparer.Ordinal);
+    private readonly IReadOnlySet<string> _computedParameters;
 
-    public TemplateParameterPromptState(IEngineEnvironmentSettings settings, ITemplateInfo template, string name, ILogger logger)
+    public TemplateParameterPromptState(
+        IEngineEnvironmentSettings settings, ITemplateInfo template, string name, ILogger logger,
+        IReadOnlySet<string> computedParameters)
     {
         _settings = settings;
         _logger = logger;
+        _computedParameters = computedParameters;
         if (!settings.Components.TryGetComponent(template.GeneratorId, out IGenerator? generator) || generator is null)
         {
             throw new InvalidOperationException($"Template generator '{template.GeneratorId}' is not registered.");
@@ -109,6 +115,14 @@ internal sealed class TemplateParameterPromptState
                 {
                     throw new TemplateAuthoringException($"{parameter.Name}: {error ?? condition}", parameter.Name);
                 }
+            }
+            if (references.Overlaps(_computedParameters))
+            {
+                // NuGet policy can depend on answers, so computed values are resolved after
+                // prompting. They cannot also control that earlier prompting phase.
+                throw new TemplateAuthoringException(
+                    string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ComputedTemplateParameterCondition, parameter.Name),
+                    parameter.Name);
             }
             references.Remove(parameter.Name);
             dependencies[parameter] = references;

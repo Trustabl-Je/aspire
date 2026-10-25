@@ -6,12 +6,17 @@ using System.Text.Json;
 using Aspire.Cli.Resources;
 using Microsoft.TemplateEngine.Abstractions;
 using Microsoft.TemplateEngine.Utils;
+using NuGet.Packaging;
+using NuGet.Versioning;
 
 namespace Aspire.Cli.Templating;
 
 internal sealed class TemplateHostConfiguration
 {
     private readonly Dictionary<string, SymbolInfo> _symbols = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, NuGetPackageVersionValueSource> _valueSources = new(StringComparer.Ordinal);
+
+    public IReadOnlyDictionary<string, NuGetPackageVersionValueSource> ValueSources => _valueSources;
 
     /// <summary>
     /// Gets whether this template opts into creating a missing output-root NuGet configuration
@@ -116,6 +121,10 @@ internal sealed class TemplateHostConfiguration
                         displayName = label.GetString();
                     }
                     configuration._symbols[symbol.Name] = new SymbolInfo(hidden, displayName);
+                    if (symbol.Value.TryGetProperty("valueSource", out var valueSource))
+                    {
+                        configuration._valueSources.Add(symbol.Name, ReadValueSource(valueSource, template, symbol.Name));
+                    }
                 }
             }
             catch (JsonException ex)
@@ -129,5 +138,40 @@ internal sealed class TemplateHostConfiguration
         return configuration;
     }
 
+    private static NuGetPackageVersionValueSource ReadValueSource(JsonElement source, ITemplateInfo template, string name)
+    {
+        // Literal host metadata, not an engine expression:
+        // {"kind":"nugetPackageVersion","packageId":"Example","versionRange":"[1.0,2.0)"}
+        // Only ordinary string parameters can opt in; SDK identity and source projection
+        // keep their separate contracts rather than becoming package-version lookups.
+        var parameter = template.ParameterDefinitions.FirstOrDefault(parameter => parameter.Name == name);
+        if (parameter is null || parameter.IsName || parameter.Type != "parameter" ||
+            !parameter.DataType.Equals("string", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("AspireVersion", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("AspireNuGetSource", StringComparison.OrdinalIgnoreCase) ||
+            source.ValueKind != JsonValueKind.Object ||
+            !source.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String ||
+            kind.GetString() != "nugetPackageVersion" ||
+            !source.TryGetProperty("packageId", out var id) || id.ValueKind != JsonValueKind.String ||
+            !PackageIdValidator.IsValidPackageId(id.GetString()!) ||
+            !source.TryGetProperty("versionRange", out var versionRange) || versionRange.ValueKind != JsonValueKind.String ||
+            !VersionRange.TryParse(versionRange.GetString()!, out var range) ||
+            (source.TryGetProperty("allowPrerelease", out var prerelease) &&
+                prerelease.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) ||
+            (source.TryGetProperty("workingDirectory", out var directory) &&
+                (directory.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(directory.GetString()))))
+        {
+            throw new JsonException(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.InvalidTemplateValueSource, name));
+        }
+
+        return new NuGetPackageVersionValueSource(
+            id.GetString()!, range,
+            source.TryGetProperty("allowPrerelease", out prerelease) && prerelease.ValueKind == JsonValueKind.True,
+            source.TryGetProperty("workingDirectory", out directory) ? directory.GetString()! : ".");
+    }
+
     private sealed record SymbolInfo(bool IsHidden, string? DisplayName);
 }
+
+internal sealed record NuGetPackageVersionValueSource(
+    string PackageId, VersionRange VersionRange, bool AllowPrerelease, string WorkingDirectory);

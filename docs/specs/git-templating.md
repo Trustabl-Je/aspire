@@ -276,15 +276,103 @@ includes its complete set of hiding rules. Standalone MSTest, NUnit, xUnit, and
 service-defaults templates do not include Aspire-specific host files.
 The five .NET templates opt into `createNuGetConfig` for their package restores.
 
-Host metadata changes the interactive questionnaire, not the generation model.
-The .NET CLI itself primarily exposes arguments and applies defaults; Aspire
-continues to prompt for ordinary visible parameters.
+Host metadata controls the interactive questionnaire, missing-root NuGet policy,
+and explicitly configured package-version values. The .NET CLI itself primarily
+exposes arguments and applies defaults; Aspire continues to prompt for ordinary
+visible parameters.
 
 Repository template sources can also contain build-time `!!REPLACE_...!!` tokens
 that are normally substituted while packaging. Host metadata does not resolve
 those tokens. To use a raw source directory or a copied Git template, first
 materialize those values or replace them with template symbols, such as the
 `AspireVersion` parameter described below.
+
+### NuGet-computed parameter values
+
+A template can opt an ordinary string parameter into package-specific version
+resolution through its selected host file. For example, `template.json` declares:
+
+```json
+{
+  "symbols": {
+    "DotnetIntegrationVersion": {
+      "type": "parameter",
+      "datatype": "string",
+      "replaces": "{{dotnetIntegrationVersion}}"
+    }
+  }
+}
+```
+
+The corresponding entry in `aspirecli.host.json` supplies the resolution policy:
+
+```json
+{
+  "symbolInfo": {
+    "DotnetIntegrationVersion": {
+      "valueSource": {
+        "kind": "nugetPackageVersion",
+        "packageId": "Aspire.Hosting.Dotnet",
+        "versionRange": "[13.6.0-preview.0,13.7.0)",
+        "allowPrerelease": true,
+        "workingDirectory": "."
+      }
+    }
+  }
+}
+```
+
+`kind`, `packageId`, and `versionRange` are required literal strings.
+`allowPrerelease` is an optional JSON Boolean, defaulting to `false`.
+`workingDirectory` defaults to the output root; an explicit value must identify
+an existing generated directory relative to that root. For example, `"AppHost"`
+selects that project's nested configuration as well as the root and inherited
+configuration. Rooted paths, paths escaping the output, and missing directories
+are errors. The usual single-host-file precedence applies; values are not merged
+from an unused fallback file.
+
+The CLI chooses the highest available matching NuGet version, honoring both
+[NuGet version ranges](https://learn.microsoft.com/nuget/concepts/package-versioning#version-ranges)
+and floating-version constraints. Prerelease versions are eligible only when
+explicitly allowed. Each package is resolved independently; a stable SDK version
+such as `13.6.3` does not imply that an integration publishes `13.6.3`.
+Computed values are never prompted, even without `isHidden`, and override the
+parameter's default. Disabled parameters are not queried. Ordinary parameters
+without this opt-in keep their existing behavior and explicit version pins.
+Unknown parameters, non-string parameters, and the reserved `AspireVersion` and
+`AspireNuGetSource` parameters cannot be used as computed targets.
+
+Resolution uses the configuration that will govern restore, not just the CLI
+channel's first source: template-owned configuration, any explicitly requested
+CLI-generated root configuration, ancestor/user/machine settings, disabled
+sources, package source mappings, relative local sources, configured credentials,
+and NuGet credential providers. Disallowed sources are filtered before querying
+them. All eligible feeds contribute versions; search-result ranking, source
+order, and search pagination do not decide which version wins. An eligible feed
+failure fails resolution rather than silently choosing a version from the
+remaining feeds. An empty policy or no compatible version is also an explicit
+error; neither the parameter default nor the SDK version is used as a fallback.
+
+Computed templates are rendered privately in a leased sibling staging directory
+so they inherit the destination's ancestor settings. The CLI first renders
+version-shaped placeholders, establishes missing-root policy, and queries NuGet.
+It then clears that disposable render and renders again at the same staging
+path with the resolved versions. The generated NuGet configuration paths and
+contents must remain identical between renders. This rejects circular policy,
+including a computed value selecting its own feeds, credentials, or config-file
+location. Computed values are resolved after ordinary answers, so they cannot
+control `isEnabled` or `isRequired` parameter conditions; ordinary answers can
+still enable or disable computed parameters. Symbolic links in staged output
+are rejected.
+
+Lookup, validation, and cancellation failures clean up staging without publishing
+destination files. A new output directory is published by moving the completed
+staging directory; an existing empty directory is populated without overwriting
+files or replacing its identity. Publishing to an existing directory can still
+fail partway on I/O errors or concurrent writes. This feature queries package
+metadata only: it does not install packages, execute restore, or run template
+post-actions. Templates without active computed values retain the ordinary
+generation flow.
 
 ### Prompting and engine execution
 
@@ -307,8 +395,9 @@ Ordinary interactive parameters still prompt when they have defaults. Multiple
 choice values use the engine's pipe-delimited representation, such as
 `web|worker`.
 
-In noninteractive mode, the CLI injects its well-known values but leaves other
-parameters unset for the engine to apply defaults and validate requirements.
+In noninteractive mode, the CLI injects its well-known and explicitly computed
+values but leaves other parameters unset for the engine to apply defaults and
+validate requirements.
 Missing mandatory inputs are errors. A declared default should not be assumed to
 bypass the engine's mandatory-input validation. There are no dynamically
 generated command-line switches for supplying arbitrary custom parameter values.
@@ -328,7 +417,7 @@ successful creation. Successful command completion also waits for required
 bundle extraction so a generated .NET AppHost can run without relying on a
 later CLI invocation to extract the bundle.
 
-Generation is not a transaction with rollback: an error after instantiation,
+Ordinary generation is not a transaction with rollback: an error after instantiation,
 such as failure to create required NuGet configuration, can leave generated
 files behind. The command reports failure rather than successful creation.
 
@@ -360,6 +449,11 @@ build metadata (`+...`). CLI identity overrides are honored.
 Version injection does not opt the template into NuGet configuration generation
 or require a resolvable package channel. Set `createNuGetConfig` in the host file
 when the generated project's restores need the CLI's root NuGet policy.
+
+This is an SDK identity, not a package-version resolver. For integrations with
+independent or preview release versions, use a separate string parameter with a
+`nugetPackageVersion` host value source instead of assuming the SDK version exists
+for every package.
 
 ### `AspireNuGetSource`
 
