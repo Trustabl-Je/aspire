@@ -6,6 +6,7 @@ using System.Security.Principal;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 
@@ -13,6 +14,78 @@ namespace Aspire.Cli.Tests.Configuration;
 
 public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task WriteSettingsFileAtomically_PreservesSymbolicLink(bool relativeTarget, bool linkedDirectory)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var project = workspace.CreateDirectory("project");
+        var shared = workspace.CreateDirectory("shared");
+        var targetPath = Path.Combine(shared.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(targetPath, """{"custom":"original"}""");
+        var targetDirectory = shared.FullName;
+        if (linkedDirectory)
+        {
+            targetDirectory = Path.Combine(workspace.Path, "linked-shared");
+            TestSymlinkHelper.TryCreateSymlink(targetDirectory, shared.FullName);
+        }
+        var path = Path.Combine(project.FullName, AspireConfigFile.FileName);
+        var linkTarget = Path.Combine(targetDirectory, AspireConfigFile.FileName);
+        if (relativeTarget)
+        {
+            linkTarget = Path.GetRelativePath(project.FullName, linkTarget);
+        }
+        TestSymlinkHelper.TryCreateSymlink(path, linkTarget, isDirectory: false);
+
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None);
+
+        Assert.Equal(linkTarget, new FileInfo(path).LinkTarget);
+        Assert.Equal("updated", JsonNode.Parse(await File.ReadAllTextAsync(targetPath))!["custom"]!.GetValue<string>());
+        Assert.Equal(await File.ReadAllTextAsync(targetPath), await File.ReadAllTextAsync(path));
+        Assert.Equal(path, Assert.Single(Directory.GetFiles(project.FullName)));
+        Assert.Equal(targetPath, Assert.Single(Directory.GetFiles(shared.FullName)));
+        if (linkedDirectory)
+        {
+            Assert.Equal(shared.FullName, new DirectoryInfo(targetDirectory).LinkTarget);
+        }
+    }
+
+    [Fact]
+    public async Task WriteSettingsFileAtomically_PreservesDanglingSymbolicLink()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var targetPath = Path.Combine(workspace.Path, "shared", AspireConfigFile.FileName);
+        TestSymlinkHelper.TryCreateSymlink(path, targetPath, isDirectory: false);
+
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None);
+
+        Assert.Equal(targetPath, new FileInfo(path).LinkTarget);
+        Assert.Equal("updated", JsonNode.Parse(await File.ReadAllTextAsync(targetPath))!["custom"]!.GetValue<string>());
+        Assert.Equal(path, Assert.Single(Directory.GetFiles(workspace.Path)));
+        Assert.Equal(targetPath, Assert.Single(Directory.GetFiles(Path.GetDirectoryName(targetPath)!)));
+    }
+
+    [Fact]
+    public async Task WriteSettingsFileAtomically_RejectsSymbolicLinkCycleWithoutChangingLinks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var otherPath = Path.Combine(workspace.Path, "other.json");
+        TestSymlinkHelper.TryCreateSymlink(path, otherPath, isDirectory: false);
+        TestSymlinkHelper.TryCreateSymlink(otherPath, path, isDirectory: false);
+
+        await Assert.ThrowsAsync<IOException>(() =>
+            ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None));
+
+        Assert.Equal(otherPath, new FileInfo(path).LinkTarget);
+        Assert.Equal(path, new FileInfo(otherPath).LinkTarget);
+        Assert.Equal(2, Directory.GetFiles(workspace.Path).Length);
+    }
+
     [Theory]
     [InlineData(false, UnixFileMode.UserRead | UnixFileMode.UserWrite)]
     [InlineData(true, UnixFileMode.UserRead | UnixFileMode.UserWrite)]

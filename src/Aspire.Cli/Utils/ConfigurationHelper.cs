@@ -266,6 +266,15 @@ internal static class ConfigurationHelper
 
     internal static async Task WriteSettingsFileAtomicallyAsync(string filePath, JsonObject settings, CancellationToken cancellationToken)
     {
+        // Resolve before choosing the sibling so replacement updates the target, not the link.
+        // This does not prevent filesystem races if links change during the write;
+        // concurrent link changes are not expected during normal CLI usage.
+        if (!PathNormalizer.TryResolveSymlinks(filePath, out var resolvedPath))
+        {
+            throw new IOException($"Unable to resolve symbolic links for settings file '{filePath}'.");
+        }
+        filePath = resolvedPath;
+
         EnsureDirectoryExists(filePath);
         // A sibling is required for atomic replacement even when the workspace and
         // system temp directory are on different volumes. CreateNew rejects existing links/files.
