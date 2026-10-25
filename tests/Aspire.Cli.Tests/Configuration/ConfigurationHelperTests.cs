@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
@@ -371,6 +372,82 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(["SITEMAPURL", "other"], api.Select(property => property.Key));
         Assert.Equal(expectedValue, api["SITEMAPURL"]!.GetValue<string>());
         Assert.Equal("flat", api["other"]!.GetValue<string>());
+        Assert.False(ConfigurationHelper.NormalizeSettings(settings));
+    }
+
+    [Fact]
+    public async Task NormalizeSettings_PreservesPropertyOrderAndFirstMatchingCasing()
+    {
+        var settings = JsonNode.Parse("""
+            {
+              "docs:new:leaf": 1,
+              "keep": { "value": "unchanged" },
+              "DOCS": {
+                "API": { "SITEMAPURL": "nested" },
+                "api": { "custom": "preserved" }
+              },
+              "DOCS:API:SITEMAPURL": "flat",
+              "docs:new:LEAF": 2,
+              "newSection:sub:Value": null,
+              "NEWSECTION:sub:value": 3,
+              "tail": "last",
+              "blocked": 5,
+              "blocked:key": 6
+            }
+            """)!.AsObject();
+        var retained = settings["keep"];
+        var docs = settings["DOCS"];
+
+        Assert.True(ConfigurationHelper.NormalizeSettings(settings));
+
+        Assert.Same(retained, settings["keep"]);
+        Assert.Same(docs, settings["DOCS"]);
+        Assert.False(ConfigurationHelper.NormalizeSettings(settings));
+        await Verify(settings.ToJsonString(), "json");
+    }
+
+    [Theory]
+    [InlineData(1_000, false)]
+    [InlineData(10_000, false)]
+    [InlineData(100_000, false)]
+    [InlineData(1_000, true)]
+    [InlineData(10_000, true)]
+    [InlineData(100_000, true)]
+    public void NormalizeSettings_LargeFlatConfigurationPreservesEveryValue(int propertyCount, bool hasExistingSection)
+    {
+        var settings = new JsonObject();
+        if (hasExistingSection)
+        {
+            var existing = new JsonObject();
+            for (var i = 0; i < propertyCount; i++)
+            {
+                existing.Add($"x{i}", -i);
+            }
+            settings.Add("DOCS", existing);
+        }
+        for (var i = 0; i < propertyCount; i++)
+        {
+            settings.Add($"docs:k{i}", i);
+        }
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(settings.ToJsonString()), 1, 4 * 1024 * 1024);
+        var started = Stopwatch.GetTimestamp();
+
+        Assert.True(ConfigurationHelper.NormalizeSettings(settings));
+
+        var elapsed = Stopwatch.GetElapsedTime(started);
+        outputHelper.WriteLine($"Normalized {propertyCount:N0} flat keys (existing section: {hasExistingSection}) in {elapsed.TotalMilliseconds:N1} ms.");
+        var docs = Assert.Single(settings);
+        Assert.Equal(hasExistingSection ? "DOCS" : "docs", docs.Key);
+        var properties = docs.Value!.AsObject();
+        Assert.Equal(propertyCount * (hasExistingSection ? 2 : 1), properties.Count);
+        for (var i = 0; i < propertyCount; i++)
+        {
+            Assert.Equal(i, properties[$"k{i}"]!.GetValue<int>());
+            if (hasExistingSection)
+            {
+                Assert.Equal(-i, properties[$"x{i}"]!.GetValue<int>());
+            }
+        }
         Assert.False(ConfigurationHelper.NormalizeSettings(settings));
     }
 

@@ -443,11 +443,40 @@ internal static class ConfigurationHelper
             return false;
         }
 
-        // Remove colon keys and re-add them as nested structure
+        // Rebuild once: removing flat keys individually shifts JsonObject's ordered storage.
+        // Keep the original non-flat nodes and their order.
+        var retainedProperties = settings.Where(static property => !property.Key.Contains(':')).ToArray();
+        settings.Clear();
+        foreach (var property in retainedProperties)
+        {
+            settings.Add(property.Key, property.Value);
+        }
+
+        var keyLookups = new Dictionary<JsonObject, Dictionary<string, string>>(ReferenceEqualityComparer.Instance);
+        string GetKey(JsonObject obj, string key)
+        {
+            if (!keyLookups.TryGetValue(obj, out var keys))
+            {
+                keys = new Dictionary<string, string>(obj.Count, StringComparer.OrdinalIgnoreCase);
+                foreach (var property in obj)
+                {
+                    // Preserve the first matching spelling if case-equivalent keys already exist.
+                    keys.TryAdd(property.Key, property.Key);
+                }
+                keyLookups.Add(obj, keys);
+            }
+
+            if (keys.TryGetValue(key, out var existing))
+            {
+                return existing;
+            }
+            keys.Add(key, key);
+
+            return key;
+        }
+
         foreach (var (key, value) in colonKeys)
         {
-            settings.Remove(key);
-
             // Convert "a:b:c" to nested {"a": {"b": {"c": value}}}.
             // Match existing casing so "DOCS" and "docs:api:sitemapUrl" merge into
             // one section, consistent with case-insensitive configuration lookup.
@@ -458,8 +487,7 @@ internal static class ConfigurationHelper
             // Walk all but the last segment, creating objects as needed.
             for (int i = 0; i < parts.Length - 1; i++)
             {
-                var part = currentObject.Select(property => property.Key)
-                    .FirstOrDefault(existing => existing.Equals(parts[i], StringComparison.OrdinalIgnoreCase)) ?? parts[i];
+                var part = GetKey(currentObject, parts[i]);
 
                 if (!currentObject.ContainsKey(part) || currentObject[part] is null)
                 {
@@ -486,8 +514,7 @@ internal static class ConfigurationHelper
                 continue;
             }
 
-            var finalKey = currentObject.Select(property => property.Key)
-                .FirstOrDefault(existing => existing.Equals(parts[^1], StringComparison.OrdinalIgnoreCase)) ?? parts[^1];
+            var finalKey = GetKey(currentObject, parts[^1]);
 
             // If the final key already exists, keep its value and drop the flat key.
             if (currentObject.ContainsKey(finalKey) && currentObject[finalKey] is not null)
