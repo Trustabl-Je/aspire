@@ -2,7 +2,7 @@
   "version": 1,
   "issue": 8728,
   "issue_url": "https://github.com/microsoft/aspire/issues/8728",
-  "phase": "worker",
+  "phase": "ready",
   "created_at": "2026-10-26T21:19:51.977334+00:00",
   "base_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
   "control_sha": "40065c457181d2cb91bfb98d26500d1ecfe55fc0",
@@ -15,7 +15,24 @@
     "fixes": 0,
     "runner_iterations": 9
   },
-  "history": [],
+  "history": [
+    {
+      "sha": "a8432da4cc5c92ee91308e6f93a5d3a384d53eea",
+      "source_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
+      "workflow": "reproduce-flaky-tests.yml",
+      "phase": "reproduce",
+      "runners": 3,
+      "iterations": 3,
+      "mode": "single",
+      "branch": "ankj/flaky-test-8728-run-1",
+      "id": 40404191349,
+      "passed": 9,
+      "failed": 0,
+      "actual_tests": 9,
+      "runner_iterations": 9,
+      "errors": []
+    }
+  ],
   "notes": [
     {
       "run_id": 40403453037,
@@ -45,7 +62,7 @@
     "reason": "Linux runner, but the solution was not restored/built and the DCP orchestrator and test project prerequisites were not verified; skipped in this bounded phase in favor of hosted reproduction."
   },
   "outcome": null,
-  "updated_at": "2026-10-26T21:25:15.264156+00:00",
+  "updated_at": "2026-10-26T21:31:16.590305+00:00",
   "transitions": [
     {
       "phase": "ready",
@@ -76,6 +93,11 @@
       "phase": "worker",
       "reason": "Owned worker dispatched; original reports must pass independent validation.",
       "at": "2026-10-26T21:25:15.264156+00:00"
+    },
+    {
+      "phase": "ready",
+      "reason": "Accepted reproduce/single evidence: 9 target passes, 0 target failures; 9 actual tests.",
+      "at": "2026-10-26T21:31:16.590305+00:00"
     }
   ],
   "agent": {
