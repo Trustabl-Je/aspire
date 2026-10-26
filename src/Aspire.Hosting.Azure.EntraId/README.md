@@ -134,11 +134,25 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
                       // Optional: consent for all users, so that nobody is prompted.
                       .WithAdminConsent(entraApi, "access_as_user");
 
-builder.AddProject<Projects.Web>("web")
+var apiService = builder.AddProject<Projects.Api>("apiservice")
+       .WithReference(entraApi);
+
+builder.AddProject<Projects.Web>("webfrontend")
        .WithReference(entraWeb)
-       .WithEnvironment("DownstreamApis__Api__Scopes__0", entraApi.Resource.GetScopeUri("access_as_user"));
+       .WithReference(apiService);
 ```
 
+* **Configuration flows automatically.** Referencing the client registration gives the consumer an entry under `DownstreamApis` for each API the registration declared permissions to. Delegated permissions become `DownstreamApis__{name}__Scopes__{index}` (here `api://{clientId}/access_as_user`). Application permissions are a separate `{name}AppOnly` entry with the `/.default` scope and `RequestAppToken=true`, because a token request covers one resource and one flow. For an API registration in the AppHost, `{name}` is the name of each resource that references it (`apiservice`), the same name that service discovery uses; if nothing references it the registration's own name is used. First-party APIs are named `MicrosoftGraph`, `AzureResourceManager` and `AzureStorage`, or with the display name passed to `EntraIdApi.FromApplicationId`. Pass `downstreamApisConfigKey` to `WithReference(entraWeb, downstreamApisConfigKey: "MyDownstreamApis")` to change the root key, which defaults to `DownstreamApis`. Other languages get the same settings with uppercase snake-case names, for example `ENTRA_WEBFRONTEND_ENTRA_DOWNSTREAM_APIS_APISERVICE_SCOPES_0`.
+* **Use the entry in the app.** The entry holds the scopes, not the API's URL: set the client's address yourself, for example through service discovery. `AddMicrosoftIdentityMessageHandler` reads the settings from the section that you pass, so pass the API's entry, not the root:
+
+  ```csharp
+  builder.Services.AddHttpClient<WeatherApiClient>(client => client.BaseAddress = new("https+http://apiservice"))
+      .AddMicrosoftIdentityMessageHandler(
+          builder.Configuration.GetSection("DownstreamApis:apiservice"), "DownstreamApis:apiservice");
+  ```
+
+  `AddDownstreamApis(builder.Configuration.GetSection("DownstreamApis"))` registers every entry for `IDownstreamApi` by name instead.
+* **The API's own settings.** Referencing a registration that exposes scopes also sets `AzureAd__Scopes` to its enabled scope names, which `[RequiredScope]` reads.
 * **Application ID URI.** A registration with scopes uses `api://{clientId}`. The client ID exists only after the registration is created, so Aspire sets the URI with a second update of the same registration in the same deployment. `api://{clientId}` is accepted by every tenant's default application-management policy. Call `WithApplicationIdUri("api://contoso-orders")` for a custom URI, which must be unique in the tenant and satisfy its policy (by default `api://{clientId}`, `api://{tenantId}/{name}` or a verified domain). The deployment fails when the policy rejects the URI. `GetScopeUri` returns the full scope name, for example `api://{clientId}/access_as_user`.
 * **Stable scope IDs.** Scope IDs derive from the registration and scope names, so every deployment, and every tenant, produces the same IDs. Set `EntraIdScope.Id` to adopt a scope that already exists.
 * **Retiring a scope.** Microsoft Graph rejects a deployment that removes an enabled scope or renames it. Retire a scope in two deployments: set `IsEnabled = false` through `WithScope`'s callback and deploy, then remove the scope and deploy again. Scopes can't be requested, declared or pre-authorized while disabled.

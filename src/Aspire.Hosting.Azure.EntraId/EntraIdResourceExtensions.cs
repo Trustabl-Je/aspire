@@ -1968,6 +1968,11 @@ public static class EntraIdResourceExtensions
     /// When empty, omits the prefix and its separator, producing <c>ClientId</c> for .NET program resources and <c>CLIENT_ID</c> for other resources.
     /// For .NET program resources, <c>:</c> in the name is replaced by <c>__</c>.
     /// </param>
+    /// <param name="downstreamApisConfigKey">
+    /// The root configuration key of the <c>DownstreamApis</c> entries for the APIs that the application declared permissions to
+    /// (see <c>WithApiPermissions</c>). When <see langword="null"/>, uses <c>"DownstreamApis"</c>.
+    /// For .NET program resources, <c>:</c> in the key is replaced by <c>__</c>.
+    /// </param>
     /// <returns>The resource builder for chaining.</returns>
     /// <remarks>
     /// <para>
@@ -1985,6 +1990,11 @@ public static class EntraIdResourceExtensions
     /// builder.Services.AddAuthentication()
     ///     .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
     /// </code>
+    /// <para>
+    /// When the application declared permissions to other APIs, the consumer also receives one entry per API under the
+    /// <paramref name="downstreamApisConfigKey"/> section: <c>{key}__{name}__Scopes__{index}</c>. For an API registration in the AppHost,
+    /// <c>{name}</c> is the name of each resource that references that registration, like the name used for service discovery.
+    /// </para>
     /// <example>
     /// <code lang="csharp">
     /// var entraApi = builder.AddExistingEntraApplication("entra-api",
@@ -1999,30 +2009,38 @@ public static class EntraIdResourceExtensions
     public static IResourceBuilder<T> WithReference<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<EntraIdApplicationResource> source,
-        string? connectionName = null)
+        string? connectionName = null,
+        string? downstreamApisConfigKey = null)
         where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(source);
+        if (downstreamApisConfigKey is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(downstreamApisConfigKey);
+        }
 
         // Inspect the resource itself so .NET defaults also apply when the builder's type has been erased.
 #pragma warning disable ASPIREPROJECTS001
         var isDotnetProgram = builder.Resource is IDotnetProgramResource;
 #pragma warning restore ASPIREPROJECTS001
         connectionName ??= isDotnetProgram ? "AzureAd" : EnvironmentVariableNameEncoder.Encode(source.Resource.Name);
+        downstreamApisConfigKey ??= "DownstreamApis";
 
         if (isDotnetProgram)
         {
             connectionName = connectionName.Replace(":", "__", StringComparison.Ordinal);
+            downstreamApisConfigKey = downstreamApisConfigKey.Replace(":", "__", StringComparison.Ordinal);
         }
 
-        return WithReferenceCore(builder, source, connectionName, isDotnetProgram);
+        return WithReferenceCore(builder, source, connectionName, downstreamApisConfigKey, isDotnetProgram);
     }
 
     private static IResourceBuilder<T> WithReferenceCore<T>(
         IResourceBuilder<T> builder,
         IResourceBuilder<EntraIdApplicationResource> source,
         string connectionName,
+        string downstreamApisConfigKey,
         bool isDotnetProgram)
         where T : IResourceWithEnvironment
     {
@@ -2107,6 +2125,44 @@ public static class EntraIdResourceExtensions
             if (entra.AllowWebApiToBeAuthorizedByACL)
             {
                 environmentVariables[$"{keyPrefix}AllowWebApiToBeAuthorizedByACL"] = "true";
+            }
+
+            // The scopes that this registration exposes, in the space-separated form that Microsoft.Identity.Web's
+            // RequiredScope attribute reads from AzureAd:Scopes. A disabled scope can't be requested, so it isn't required.
+            var exposedScopes = entra.Scopes.Where(static s => s.IsEnabled).Select(static s => s.Name).ToArray();
+            if (exposedScopes.Length > 0)
+            {
+                environmentVariables[$"{keyPrefix}Scopes"] = string.Join(' ', exposedScopes);
+            }
+
+            // The APIs that this registration declares permissions to, as Microsoft.Identity.Web DownstreamApis entries.
+            // That section is a sibling of AzureAd, not part of it, so a .NET program's entries ignore the connection name.
+            var downstreamPrefix = isDotnetProgram ? $"{downstreamApisConfigKey}__" : $"{keyPrefix}{downstreamApisConfigKey}_";
+            var downstreamNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var downstreamApi in entra.ApiAccess.SelectMany(static a => a.GetDownstreamApis()))
+            {
+                // Two entries with one name would overwrite each other's scopes, and a caller would then request the wrong API's token.
+                if (!downstreamNames.Add(downstreamApi.Name))
+                {
+                    throw new InvalidOperationException(
+                        $"'{entra.Name}' declares permissions to more than one API that maps to the downstream API name '{downstreamApi.Name}'. Give the APIs different names: for registrations in the AppHost, the names of the resources that reference them, and for other APIs, the display name passed to EntraIdApi.FromApplicationId.");
+                }
+
+                var apiPrefix = $"{downstreamPrefix}{downstreamApi.Name}{separator}";
+                for (var i = 0; i < downstreamApi.Scopes.Count; i++)
+                {
+                    environmentVariables[$"{apiPrefix}Scopes{separator}{i}"] = downstreamApi.Scopes[i];
+                }
+
+                if (downstreamApi.BaseUrl is not null)
+                {
+                    environmentVariables[$"{apiPrefix}BaseUrl"] = downstreamApi.BaseUrl;
+                }
+
+                if (downstreamApi.RequestAppToken)
+                {
+                    environmentVariables[$"{apiPrefix}RequestAppToken"] = "true";
+                }
             }
 
             // Extra query parameters

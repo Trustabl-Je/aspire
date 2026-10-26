@@ -677,6 +677,20 @@ public class EntraIdApplicationResource : AzureProvisioningResource
 
     internal void AddScope(EntraIdScope scope) => _scopes.Add(scope);
 
+    // The scope's full name, as a client requests it in a token request. An existing registration without a configured URI is
+    // assumed to use the default api://{clientId}.
+    internal ReferenceExpression CreateScopeValue(string scope) => ApplicationIdUriValue switch
+    {
+        string uri => ReferenceExpression.Create($"{uri}/{scope}"),
+        BicepOutputReference output => ReferenceExpression.Create($"{output}/{scope}"),
+        _ => ClientIdValue switch
+        {
+            ParameterResource clientIdParameter => ReferenceExpression.Create($"api://{clientIdParameter}/{scope}"),
+            string clientId => ReferenceExpression.Create($"api://{clientId}/{scope}"),
+            _ => throw new InvalidOperationException($"The application ID URI of '{Name}' is not configured. Call WithApplicationIdUri with the registration's URI.")
+        }
+    };
+
     // Scope IDs must not change between deployments, and Graph rejects a request that drops an enabled scope, so a
     // random ID is not an option. Deriving the ID from the registration and scope names also gives every tenant the same IDs.
     internal Guid GetScopeId(EntraIdScope scope)

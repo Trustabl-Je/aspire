@@ -88,12 +88,16 @@ public sealed class EntraIdApi
     private EntraIdApi(
         string displayName,
         string applicationId,
+        string resourceUri,
+        string? baseUrl,
         Dictionary<string, Guid> delegatedPermissions,
         Dictionary<string, Guid> applicationPermissions,
         bool hasCatalog)
     {
         DisplayName = displayName;
         ApplicationId = applicationId;
+        ResourceUri = resourceUri;
+        BaseUrl = baseUrl;
         _delegatedPermissions = delegatedPermissions;
         _applicationPermissions = applicationPermissions;
         _hasCatalog = hasCatalog;
@@ -103,19 +107,22 @@ public sealed class EntraIdApi
     /// Gets Microsoft Graph (<c>https://graph.microsoft.com</c>).
     /// </summary>
     public static EntraIdApi MicrosoftGraph { get; } = new(
-        "Microsoft Graph", "00000003-0000-0000-c000-000000000000", s_graphDelegated, s_graphApplication, hasCatalog: true);
+        "Microsoft Graph", "00000003-0000-0000-c000-000000000000", "https://graph.microsoft.com", "https://graph.microsoft.com/v1.0",
+        s_graphDelegated, s_graphApplication, hasCatalog: true);
 
     /// <summary>
     /// Gets Azure Resource Manager (<c>https://management.azure.com</c>), whose delegated permission is <c>user_impersonation</c>.
     /// </summary>
     public static EntraIdApi AzureResourceManager { get; } = new(
-        "Azure Resource Manager", "797f4846-ba00-4fd7-ba43-dac1f8f63013", s_armDelegated, s_noPermissions, hasCatalog: true);
+        "Azure Resource Manager", "797f4846-ba00-4fd7-ba43-dac1f8f63013", "https://management.azure.com", "https://management.azure.com",
+        s_armDelegated, s_noPermissions, hasCatalog: true);
 
     /// <summary>
     /// Gets Azure Storage (<c>https://storage.azure.com</c>), whose delegated permission is <c>user_impersonation</c>.
     /// </summary>
     public static EntraIdApi AzureStorage { get; } = new(
-        "Azure Storage", "e406a681-f3d4-42a8-90b6-c2b029497af1", s_storageDelegated, s_noPermissions, hasCatalog: true);
+        "Azure Storage", "e406a681-f3d4-42a8-90b6-c2b029497af1", "https://storage.azure.com", null,
+        s_storageDelegated, s_noPermissions, hasCatalog: true);
 
     /// <summary>
     /// Gets the display name used in diagnostics.
@@ -126,6 +133,20 @@ public sealed class EntraIdApi
     /// Gets the API's application (client) ID, the same in every tenant for a first-party Microsoft API.
     /// </summary>
     public string ApplicationId { get; }
+
+    // The prefix of the API's scopes in token requests, such as "https://graph.microsoft.com/User.Read". An API
+    // identified by its application ID only is assumed to use the default application ID URI, api://{appId}.
+    internal string ResourceUri { get; }
+
+    // The API's root URL for Microsoft.Identity.Web's DownstreamApis settings, when it is the same for every caller.
+    internal string? BaseUrl { get; }
+
+    // The OpenID Connect scopes are requested at sign-in and don't belong to an API's resource, so they have no resource-qualified form.
+    internal static bool IsOpenIdScope(string name) =>
+        name.Equals("openid", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("profile", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("email", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("offline_access", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Identifies another API, whose service principal must exist in the tenant, by its application ID.
@@ -144,7 +165,8 @@ public sealed class EntraIdApi
             throw new ArgumentException($"'{applicationId}' is not a valid application ID. {error}", nameof(applicationId));
         }
 
-        return new(displayName, Guid.Parse(applicationId).ToString("D"), s_noPermissions, s_noPermissions, hasCatalog: false);
+        var normalizedId = Guid.Parse(applicationId).ToString("D");
+        return new(displayName, normalizedId, $"api://{normalizedId}", null, s_noPermissions, s_noPermissions, hasCatalog: false);
     }
 
     internal EntraIdResolvedPermission Resolve(EntraIdApiPermission permission)
