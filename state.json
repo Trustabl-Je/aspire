@@ -2,7 +2,7 @@
   "version": 1,
   "issue": 8728,
   "issue_url": "https://github.com/microsoft/aspire/issues/8728",
-  "phase": "ready",
+  "phase": "agent-intent",
   "created_at": "2026-10-26T21:19:51.977334+00:00",
   "base_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
   "control_sha": "40065c457181d2cb91bfb98d26500d1ecfe55fc0",
@@ -10,7 +10,7 @@
   "worker_sha": "a8432da4cc5c92ee91308e6f93a5d3a384d53eea",
   "agent_workflow": "reproduce-flaky-tests.yml",
   "used": {
-    "models": 1,
+    "models": 2,
     "workers": 3,
     "fixes": 0,
     "runner_iterations": 27
@@ -94,7 +94,7 @@
     "reason": "Linux runner, but the solution was not restored/built and the DCP orchestrator and test project prerequisites were not verified; skipped in this bounded phase in favor of hosted reproduction."
   },
   "outcome": null,
-  "updated_at": "2026-10-26T21:43:05.676707+00:00",
+  "updated_at": "2026-10-26T21:43:08.555345+00:00",
   "transitions": [
     {
       "phase": "ready",
@@ -160,14 +160,17 @@
       "phase": "ready",
       "reason": "Accepted reproduce/project evidence: 9 target passes, 0 target failures; 63 actual tests.",
       "at": "2026-10-26T21:43:05.676707+00:00"
+    },
+    {
+      "phase": "agent-intent",
+      "reason": "Reserved fresh model phase; dispatch receipt not yet persisted.",
+      "at": "2026-10-26T21:43:08.555345+00:00"
     }
   ],
   "agent": {
     "sha": "7d5bdbfee5292df15767c2e8da663da096db2d68",
     "workflow": "reproduce-flaky-tests.yml",
-    "branch": "ankj/flaky-test-8728-agent-1",
-    "id": 40403453037,
-    "revision": "d3d868092c2d759c82762ec0b8790a191fe2fd44"
+    "branch": "ankj/flaky-test-8728-agent-2"
   },
   "repair_scope": [
     "src/Aspire.Dashboard/",
