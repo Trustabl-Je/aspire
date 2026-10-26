@@ -13,6 +13,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Aspire.Shared.Telemetry;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Configuration;
@@ -251,6 +252,19 @@ internal sealed class ConfigSourceService(
         var changed = previous != configuration.ToJsonString();
         if (changed)
         {
+            try
+            {
+                // A preserved nested literal key can collide with a newly supplied leaf:
+                // {"docs":{"api:sitemapUrl":"local","api":{"sitemapUrl":"remote"}}}.
+                // Reject the merge rather than persisting settings startup cannot load.
+                using var parsed = new ConfigurationManager();
+                using var stream = new MemoryStream(Encoding.UTF8.GetBytes(configuration.ToJsonString()));
+                parsed.AddJsonStream(stream);
+            }
+            catch (FormatException ex)
+            {
+                throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidJsonInConfigFile, path, ex.Message));
+            }
             await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, configuration, cancellationToken);
         }
         lock (_checksLock)

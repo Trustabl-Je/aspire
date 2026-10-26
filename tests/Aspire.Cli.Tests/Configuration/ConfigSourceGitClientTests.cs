@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -221,6 +222,10 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
     [InlineData("""{"docs":{"api":{"sitemapUrl":"https://example.test/sitemap.xml"}},"DOCS":{"llmsTxtUrl":"https://example.test/llms.txt"}}""")]
     [InlineData("""{"docs":{"llmsTxtUrl":"https://example.test/llms.txt","API":{"custom":"excluded"},"api":{"sitemapUrl":"https://example.test/sitemap.xml"}}}""")]
     [InlineData("""{"DOCS":null,"docs":{"llmsTxtUrl":"https://example.test/llms.txt","api":{"sitemapUrl":"https://example.test/sitemap.xml"}}}""")]
+    [InlineData("""{"docs":{"llmsTxtUrl":"https://example.test/llms.txt","api":{"sitemapUrl":"https://example.test/sitemap.xml"}},"docs:llmsTxtUrl":"https://flat.example/llms.txt","docs:api:sitemapUrl":"https://flat.example/sitemap.xml"}""")]
+    [InlineData("""{"docs:llmsTxtUrl":"https://example.test/llms.txt","docs:api":{"sitemapUrl":"https://example.test/sitemap.xml","custom:key":"preserved"}}""")]
+    [InlineData("""{"DOCS":{"llmsTxtUrl":null,"API":{"SITEMAPURL":null}},"docs:api:sitemapUrl":"https://example.test/sitemap.xml","docs:llmsTxtUrl":"https://example.test/llms.txt"}""")]
+    [InlineData("""{"docs:llmsTxtUrl":"https://example.test/llms.txt","DOCS:LLMSTXTURL":"https://flat.example/llms.txt","docs:api:sitemapUrl":"https://example.test/sitemap.xml"}""")]
     public async Task Materialize_ReadsAllowedLeavesAcrossCaseInsensitiveSections(string content)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -237,6 +242,37 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         Assert.Equal("https://example.test/sitemap.xml", config.Docs.Api!.SitemapUrl);
     }
 
+    [Fact]
+    public async Task Acquire_PreservesLiteralDictionaryKeys()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string content = """
+            {
+              "features": { "feature:name": true },
+              "profiles": {
+                "dev:local": {
+                  "environmentVariables": { "Logging:LogLevel:Default": "Debug" }
+                }
+              },
+              "custom": { "literal:key": "preserved" },
+              "docs": { "api:sitemapUrl": "https://example.test/sitemap.xml" }
+            }
+            """;
+        await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, content);
+        var client = new ConfigSourceGitClient(TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var (_, _, configuration) = await client.AcquireAsync(
+            new() { Repository = workspace.Path, Path = AspireConfigFile.FileName },
+            workspace.CreateDirectory("cache").FullName, TestContext.Current.CancellationToken);
+
+        var config = configuration.Deserialize(JsonSourceGenerationContext.Default.AspireConfigFile)!;
+        Assert.Equal(new Dictionary<string, bool> { ["feature:name"] = true }, config.Features);
+        Assert.Equal(new Dictionary<string, string> { ["Logging:LogLevel:Default"] = "Debug" },
+            Assert.Single(config.Profiles!).Value.EnvironmentVariables);
+        Assert.Null(config.Docs!.Api);
+        await Verify(configuration.ToJsonString(), "json");
+    }
+
     [Theory]
     [InlineData("null")]
     [InlineData("[]")]
@@ -246,6 +282,9 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
     [InlineData("""{"features":{"test":true},"features":{"test":false}}""")]
     [InlineData("""{"DOCS":{"llmsTxtUrl":"https://example.test/first"},"docs":{"LLMSTXTURL":"https://example.test/second"}}""")]
     [InlineData("""{"docs":{"API":{"sitemapUrl":"https://example.test/first"},"api":{"SITEMAPURL":"https://example.test/second"}}}""")]
+    [InlineData("""{"docs":{"llmsTxtUrl":"https://example.test/first"},"DOCS":{"LLMSTXTURL":"https://example.test/second"},"docs:llmsTxtUrl":"https://example.test/flat"}""")]
+    [InlineData("""{"docs":{"api:sitemapUrl":"https://example.test/first"},"DOCS":{"API:SITEMAPURL":"https://example.test/second"}}""")]
+    [InlineData("""{"features":{"feature:name":true,"feature":{"name":false}}}""")]
     [InlineData("""{"configSource:repository":"https://example.com/nested"}""")]
     [InlineData("""{"configSource":{"repository":"https://example.com/nested","path":"config.json"}}""")]
     public async Task Acquire_RejectsInvalidConfiguration(string content)

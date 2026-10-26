@@ -49,12 +49,12 @@ internal sealed class ConfigSourceGitClient(ICliHostEnvironment hostEnvironment)
                 {
                     throw new ConfigSourceException(ConfigSourceStrings.NestedSource);
                 }
-                using var parsed = new ConfigurationManager();
-                using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
-                parsed.AddJsonStream(stream);
-                // Validate flat "features:enabled" keys using the same nested shape
-                // as local CLI settings, rather than treating them as unknown settings.
+                // Use the same root-level flat-key compatibility as local settings before
+                // validating duplicate paths and typed values such as "features:enabled".
                 ConfigurationHelper.NormalizeSettings(configuration);
+                using var parsed = new ConfigurationManager();
+                using var stream = new MemoryStream(Encoding.UTF8.GetBytes(configuration.ToJsonString()));
+                parsed.AddJsonStream(stream);
                 _ = configuration.Deserialize(JsonSourceGenerationContext.Default.AspireConfigFile);
                 return (commit, version, configuration);
             }

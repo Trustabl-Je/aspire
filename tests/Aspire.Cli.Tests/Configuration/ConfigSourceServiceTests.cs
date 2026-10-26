@@ -847,18 +847,21 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task Update_NormalizesNestedColonKeysBeforeReplacingLeaves(bool flattenedLocal, bool flattenedSource)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Update_PreservesNestedLiteralKeys(bool flattenedSource)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
-        configuration["docs"] = JsonNode.Parse(flattenedLocal
-            ? """{"api:sitemapUrl":"https://local.example/sitemap.xml","custom":"preserved"}"""
-            : """{"api":{"sitemapUrl":"https://local.example/sitemap.xml"},"custom":"preserved"}""");
+        configuration["docs"] = JsonNode.Parse("""
+            {"api":{"sitemapUrl":"https://local.example/sitemap.xml"},"custom":"preserved","custom:key":"literal"}
+            """);
+        configuration["profiles"] = JsonNode.Parse("""
+            {"dev:local":{"environmentVariables":{"Logging:LogLevel:Default":"Debug"}}}
+            """);
+        configuration["custom:setting"] = "root-flat";
         await File.WriteAllTextAsync(path, configuration.ToJsonString());
         var git = new TestConfigSourceGitClient
         {
@@ -874,10 +877,38 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
         using var parsed = new ConfigurationManager();
         parsed.AddJsonStream(stream);
-        Assert.Equal("https://remote.example/sitemap.xml", parsed["docs:api:sitemapUrl"]);
+        Assert.Equal(flattenedSource ? "https://local.example/sitemap.xml" : "https://remote.example/sitemap.xml",
+            parsed["docs:api:sitemapUrl"]);
         Assert.Equal("preserved", parsed["docs:custom"]);
         Assert.Equal("version-2", parsed["configSource:appliedVersion"]);
-        await Verify(content, "json").UseParameters(flattenedLocal, flattenedSource);
+        var config = AspireConfigFile.Load(workspace.Path)!;
+        Assert.Equal(new Dictionary<string, string> { ["Logging:LogLevel:Default"] = "Debug" },
+            Assert.Single(config.Profiles!).Value.EnvironmentVariables);
+        await Verify(content, "json").UseParameters(flattenedSource);
+    }
+
+    [Fact]
+    public async Task Update_RejectsCollisionWithNestedLiteralKeyWithoutWriting()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        configuration["docs"] = JsonNode.Parse("""{"api:sitemapUrl":"https://local.example/sitemap.xml"}""");
+        var original = configuration.ToJsonString();
+        await File.WriteAllTextAsync(path, original);
+        var git = new TestConfigSourceGitClient
+        {
+            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", JsonNode.Parse("""
+                {"docs":{"api":{"sitemapUrl":"https://remote.example/sitemap.xml"}}}
+                """)!.AsObject()))
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
+
+        await Assert.ThrowsAsync<ConfigSourceException>(() =>
+            service.CheckProjectAsync(workspace.WorkspaceRoot, force: true, CancellationToken.None));
+
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
     }
 
     [Fact]

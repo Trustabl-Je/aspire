@@ -5,9 +5,20 @@
     "appliedVersion": "version-2"
   },
   "docs": {
-    "custom": "preserved",
     "api": {
       "sitemapUrl": "https://remote.example/sitemap.xml"
+    },
+    "custom": "preserved",
+    "custom:key": "literal"
+  },
+  "profiles": {
+    "dev:local": {
+      "environmentVariables": {
+        "Logging:LogLevel:Default": "Debug"
+      }
     }
+  },
+  "custom": {
+    "setting": "root-flat"
   }
 }

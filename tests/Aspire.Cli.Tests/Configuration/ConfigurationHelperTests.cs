@@ -359,6 +359,41 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RegisterSettingsFiles_PreservesLiteralDictionaryKeysWithoutSource(bool persistNormalization)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var settingsPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string original = """
+            {
+              "features": { "feature:name": true },
+              "profiles": {
+                "default": {
+                  "environmentVariables": { "Logging:LogLevel:Default": "Debug" }
+                },
+                "dev:local": { "applicationUrl": "https://localhost:1234" }
+              },
+              "custom": { "nested": { "literal:key": "preserved" } }
+            }
+            """;
+        File.WriteAllText(settingsPath, original);
+        var globalSettingsFile = new FileInfo(Path.Combine(workspace.Path, "global-settings.json"));
+        using var configuration = new ConfigurationManager();
+
+        ConfigurationHelper.RegisterSettingsFiles(configuration, workspace.WorkspaceRoot, globalSettingsFile, persistNormalization);
+
+        Assert.Equal(original, File.ReadAllText(settingsPath));
+        var config = AspireConfigFile.Load(workspace.Path)!;
+        Assert.Null(config.ConfigSource);
+        Assert.Equal(new Dictionary<string, bool> { ["feature:name"] = true }, config.Features);
+        Assert.Equal(["default", "dev:local"], config.Profiles!.Keys);
+        Assert.Equal(new Dictionary<string, string> { ["Logging:LogLevel:Default"] = "Debug" },
+            config.Profiles["default"].EnvironmentVariables);
+        Assert.Equal("https://localhost:1234", config.Profiles["dev:local"].ApplicationUrl);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task RegisterSettingsFiles_NormalizesCompletePathsAcrossCaseEquivalentSections(bool persistNormalization)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -441,9 +476,6 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("""{"DOCS":{"API":{"SITEMAPURL":"nested"}},"docs:api:other":"flat","docs:api:sitemapUrl":"flat"}""", "nested")]
     [InlineData("""{"DOCS":{"API":{"SITEMAPURL":null}},"docs:api:other":"flat","docs:api:sitemapUrl":"flat"}""", "flat")]
-    [InlineData("""{"DOCS":{"API:SITEMAPURL":"flat","API:other":"flat"}}""", "flat")]
-    [InlineData("""{"DOCS":{"API":{"SITEMAPURL":"nested"},"API:SITEMAPURL":"flat","API:other":"flat"}}""", "nested")]
-    [InlineData("""{"DOCS":{"API":{"SITEMAPURL":null},"API:SITEMAPURL":"flat","API:other":"flat"}}""", "flat")]
     public void NormalizeSettings_MergesMixedCaseSegmentsAndPreservesNestedPrecedence(string json, string expectedValue)
     {
         var settings = JsonNode.Parse(json)!.AsObject();
@@ -461,35 +493,24 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NormalizeSettings_NestedColonKeysRespectCompletePathsAcrossSections()
+    public async Task NormalizeSettings_PreservesNestedLiteralKeys()
     {
         var settings = JsonNode.Parse("""
             {
-              "DOCS": {
-                "custom": "preserved",
-                "API:other": null,
-                "api:sitemapUrl": "partially-flat",
-                "api:custom:enabled": false,
-                "api:object": { "nested:value": 42 }
+              "profiles": {
+                "dev:local": {
+                  "environmentVariables": { "Logging:LogLevel:Default": "Debug" }
+                }
               },
-              "docs": { "api": { "SITEMAPURL": "nested", "other": true } },
-              "docs:api:sitemapUrl": "flat",
-              "docs:api:rootOnly": "root",
-              "flags": { "nested": { "enabled:value": true } }
+              "features": { "feature:name": true },
+              "custom": { "nested": { "literal:key": "preserved" } },
+              "settings:object": { "nested:value": 42 },
+              "settings:enabled": true
             }
             """)!.AsObject();
 
         Assert.True(ConfigurationHelper.NormalizeSettings(settings));
 
-        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(settings.ToJsonString()));
-        using var configuration = new ConfigurationManager();
-        configuration.AddJsonStream(stream);
-        Assert.Equal("nested", configuration["docs:api:sitemapUrl"]);
-        Assert.True(configuration.GetValue<bool>("docs:api:other"));
-        Assert.False(configuration.GetValue<bool>("docs:api:custom:enabled"));
-        Assert.Equal(42, configuration.GetValue<int>("docs:api:object:nested:value"));
-        Assert.Equal("root", configuration["docs:api:rootOnly"]);
-        Assert.True(configuration.GetValue<bool>("flags:nested:enabled:value"));
         Assert.False(ConfigurationHelper.NormalizeSettings(settings));
         await Verify(settings.ToJsonString(), "json");
     }

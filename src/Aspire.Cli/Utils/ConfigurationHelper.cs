@@ -425,51 +425,24 @@ internal static class ConfigurationHelper
 
     internal static bool NormalizeSettings(JsonObject settings)
     {
-        var colonKeys = new List<(string Key, JsonNode? Value)>();
-        void CollectColonKeys(JsonObject obj, string? prefix)
-        {
-            foreach (var property in obj)
-            {
-                if (!property.Key.Contains(':') && property.Value is JsonObject section)
-                {
-                    var path = prefix is null ? property.Key : $"{prefix}:{property.Key}";
-                    CollectColonKeys(section, path);
-                }
-            }
-
-            var flatProperties = obj.Where(static property => property.Key.Contains(':')).ToArray();
-            if (flatProperties.Length == 0)
-            {
-                return;
-            }
-
-            // Rebuild once: removing flat keys individually shifts JsonObject's ordered storage.
-            // Keep the original non-flat nodes and their order.
-            var retainedProperties = obj.Where(static property => !property.Key.Contains(':')).ToArray();
-            obj.Clear();
-            foreach (var property in retainedProperties)
-            {
-                obj.Add(property.Key, property.Value);
-            }
-
-            foreach (var property in flatProperties)
-            {
-                var value = property.Value?.DeepClone();
-                if (value is JsonObject section)
-                {
-                    NormalizeSettings(section);
-                }
-                var path = prefix is null ? property.Key : $"{prefix}:{property.Key}";
-                colonKeys.Add((path, value));
-            }
-        }
-
-        // {"docs":{"api:sitemapUrl":"flat"}} must share the complete-path lookup
-        // with nested values in other case-equivalent sections. Collect deeper keys first.
-        CollectColonKeys(settings, prefix: null);
-        if (colonKeys.Count == 0)
+        // Only root keys use legacy flat notation. Nested keys such as
+        // {"environmentVariables":{"Logging:LogLevel:Default":"Debug"}} can be literal names.
+        var colonKeys = settings
+            .Where(static property => property.Key.Contains(':'))
+            .Select(static property => (property.Key, Value: property.Value?.DeepClone()))
+            .ToArray();
+        if (colonKeys.Length == 0)
         {
             return false;
+        }
+
+        // Rebuild once: removing flat keys individually shifts JsonObject's ordered storage.
+        // Keep the original non-flat nodes and their order.
+        var retainedProperties = settings.Where(static property => !property.Key.Contains(':')).ToArray();
+        settings.Clear();
+        foreach (var property in retainedProperties)
+        {
+            settings.Add(property.Key, property.Value);
         }
 
         var keyLookups = new Dictionary<JsonObject, Dictionary<string, string>>(ReferenceEqualityComparer.Instance);
