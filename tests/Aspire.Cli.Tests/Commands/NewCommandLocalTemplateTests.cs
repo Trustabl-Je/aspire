@@ -1507,20 +1507,24 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
     public async Task RepositoryTemplate_RejectsTemplatePathThroughSymbolicLink()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var linkPath = Path.Combine(workspace.Path, "template-link");
+        try
+        {
+            Directory.CreateSymbolicLink(linkPath, workspace.Path);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
+        }
+
         var interaction = new TestInteractionService();
         var gitRunner = new TestGitRunner
         {
             CloneAsyncCallback = (_, destination, _, _) =>
             {
                 Directory.CreateDirectory(Path.Combine(destination.FullName, ".git"));
-                try
-                {
-                    Directory.CreateSymbolicLink(Path.Combine(destination.FullName, "template"), workspace.Path);
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    Assert.Skip("Creating symbolic links requires additional privileges on this platform.");
-                }
+                // Probe outside the command so its exception handling cannot swallow Assert.Skip.
+                Directory.Move(linkPath, Path.Combine(destination.FullName, "template"));
 
                 return Task.CompletedTask;
             }
