@@ -2,7 +2,7 @@
   "version": 1,
   "issue": 8728,
   "issue_url": "https://github.com/microsoft/aspire/issues/8728",
-  "phase": "ready",
+  "phase": "worker-intent",
   "created_at": "2026-10-26T21:19:51.977334+00:00",
   "base_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
   "control_sha": "40065c457181d2cb91bfb98d26500d1ecfe55fc0",
@@ -11,9 +11,9 @@
   "agent_workflow": "reproduce-flaky-tests.yml",
   "used": {
     "models": 1,
-    "workers": 1,
+    "workers": 2,
     "fixes": 0,
-    "runner_iterations": 9
+    "runner_iterations": 18
   },
   "history": [
     {
@@ -62,7 +62,7 @@
     "reason": "Linux runner, but the solution was not restored/built and the DCP orchestrator and test project prerequisites were not verified; skipped in this bounded phase in favor of hosted reproduction."
   },
   "outcome": null,
-  "updated_at": "2026-10-26T21:31:16.590305+00:00",
+  "updated_at": "2026-10-26T21:31:19.680609+00:00",
   "transitions": [
     {
       "phase": "ready",
@@ -98,6 +98,11 @@
       "phase": "ready",
       "reason": "Accepted reproduce/single evidence: 9 target passes, 0 target failures; 9 actual tests.",
       "at": "2026-10-26T21:31:16.590305+00:00"
+    },
+    {
+      "phase": "worker-intent",
+      "reason": "Baseline 2/3 (single): previous clean baseline; continue the fixed policy without a model.",
+      "at": "2026-10-26T21:31:19.680609+00:00"
     }
   ],
   "agent": {
@@ -142,7 +147,6 @@
     "runners": 3,
     "iterations": 3,
     "mode": "single",
-    "branch": "ankj/flaky-test-8728-run-1",
-    "id": 40404191349
+    "branch": "ankj/flaky-test-8728-run-2"
   }
 }
