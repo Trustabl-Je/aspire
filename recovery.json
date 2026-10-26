@@ -17,7 +17,10 @@
       "deadline": 1793059022.0
     }
   },
-  "pending_dispatch": null,
+  "pending_dispatch": {
+    "checkpoint": "e33d35eea2445dbe9e7ee5e5722fd7f18a69ad3d",
+    "at": 1793057858.8127875
+  },
   "cancellations": {},
   "status": "active"
 }
