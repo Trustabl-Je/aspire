@@ -429,7 +429,7 @@ internal sealed partial class TemplateEngineFactory(
             : !string.IsNullOrWhiteSpace(parameter.DisplayName)
             ? parameter.DisplayName
             : !string.IsNullOrWhiteSpace(parameter.Description) ? parameter.Description : parameter.Name).EscapeMarkup();
-        if (parameter.DataType.Equals("bool", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(parameter.DataType, "bool", StringComparison.OrdinalIgnoreCase))
         {
             var value = await interactionService.PromptConfirmAsync(
                 prompt,
@@ -440,8 +440,10 @@ internal sealed partial class TemplateEngineFactory(
 
         if (parameter.Choices is { Count: > 0 } choices)
         {
-            // The engine represents multi-choice values as "red|blue", not comma-separated input.
-            var defaults = parameter.DefaultValue?.Split('|') ?? [];
+            // Multi-choice defaults accept "web|worker" or "web,worker"; single-choice keys are literal.
+            var defaults = parameter.DefaultValue is { } defaultValue
+                ? parameter.AllowMultipleValues ? defaultValue.Split(MultiValueParameter.MultiValueSeparators) : [defaultValue]
+                : [];
             var keys = choices.Keys.OrderByDescending(key => defaults.Contains(key, StringComparer.OrdinalIgnoreCase)).ToArray();
             string FormatChoice(string key) => (string.IsNullOrWhiteSpace(choices[key].DisplayName) ? key : choices[key].DisplayName).EscapeMarkup();
             if (parameter.AllowMultipleValues)

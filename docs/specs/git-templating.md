@@ -359,11 +359,11 @@ disabled-precedence parameters are not prompted.
 
 | Metadata | Interactive behavior |
 | --- | --- |
-| Text parameter | String prompt with the declared default and requiredness |
+| Text parameter (including omitted `datatype`) | String prompt with the declared default and requiredness |
 | Boolean parameter | Confirmation prompt using the declared default |
-| Single choice | Selection using choice display names and the declared default |
+| Single choice | Selection using choice display names and the declared default as a literal key |
 | Optional single choice without a default | Initial **Skip** option that leaves the value unset |
-| Multiple choice | Multiple selection with declared defaults preselected |
+| Multiple choice | Multiple selection with declared defaults preselected; both `\|` and `,` separate default values |
 | `isEnabled` / `isRequired` expressions | Engine-backed condition evaluation; controlling parameters are collected before dependents |
 
 Prompt labels use a nonempty host-file `displayName`, then the parameter display

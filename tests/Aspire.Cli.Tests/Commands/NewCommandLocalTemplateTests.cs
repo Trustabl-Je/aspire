@@ -27,6 +27,111 @@ namespace Aspire.Cli.Tests.Commands;
 public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LocalTemplate_ParameterWithoutDataTypeUsesTextPrompt(bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var config = workspace.CreateDirectory("template/.template.config");
+        await File.WriteAllTextAsync(Path.Combine(config.FullName, "template.json"), """
+            {
+              "identity": "Aspire.Local.OmittedDataType", "name": "Omitted datatype", "shortName": "omitted-datatype",
+              "symbols": {
+                "Greeting": {
+                  "type": "parameter", "displayName": "Greeting text",
+                  "defaultValue": "Hello", "replaces": "GreetingValue"
+                }
+              }
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "template", "greeting.txt"), "GreetingValue");
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse("Welcome");
+        using var provider = CreateServices(workspace, interaction, interactive).BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interaction.DisplayedErrors);
+        if (interactive)
+        {
+            var prompt = Assert.Single(interaction.StringPromptCalls);
+            Assert.Equal("Greeting text", prompt.PromptText);
+            Assert.Equal("Hello", prompt.DefaultValue);
+        }
+        else
+        {
+            Assert.Empty(interaction.StringPromptCalls);
+        }
+        await Verify(ReadOutput(workspace)).UseParameters(interactive);
+    }
+
+    [Theory]
+    [InlineData(true, "web|worker")]
+    [InlineData(true, "web,worker")]
+    [InlineData(true, "web,worker|api")]
+    [InlineData(false, "web,worker")]
+    [InlineData(false, "web|worker")]
+    public async Task LocalTemplate_ChoiceDefaultsMatchEngineSemantics(bool allowMultipleValues, string defaultValue)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var config = workspace.CreateDirectory("template/.template.config");
+        string[] choices = allowMultipleValues ? ["unused", "web", "worker", "api"] : ["unused", defaultValue];
+        await File.WriteAllTextAsync(Path.Combine(config.FullName, "template.json"), JsonSerializer.Serialize(new
+        {
+            identity = "Aspire.Local.ChoiceDefaults",
+            name = "Choice defaults",
+            shortName = "choice-defaults",
+            symbols = new
+            {
+                Features = new
+                {
+                    type = "parameter",
+                    datatype = "choice",
+                    displayName = "Features",
+                    allowMultipleValues,
+                    defaultValue,
+                    replaces = "FeaturesValue",
+                    choices = choices.Select(choice => new { choice })
+                }
+            }
+        }));
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "template", "features.txt"), "FeaturesValue");
+        var interaction = new TestInteractionService();
+        var selectionCount = 0;
+        interaction.PromptForSelectionCallback = (prompt, options, _, _) =>
+        {
+            selectionCount++;
+            Assert.Equal("Features", prompt);
+            Assert.Equal([defaultValue, "unused"], options.Cast<string>());
+            return options.Cast<string>().First();
+        };
+        using var provider = CreateServices(workspace, interaction, interactive: true).BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Equal(allowMultipleValues ? 0 : 1, selectionCount);
+        if (allowMultipleValues)
+        {
+            var prompt = Assert.Single(interaction.MultiSelectionPromptCalls);
+            Assert.Equal("Features", prompt.PromptText);
+            Assert.Equal(defaultValue.Contains("api", StringComparison.Ordinal)
+                ? ["web", "worker", "api"] : ["web", "worker"], prompt.PreSelected.Cast<string>());
+        }
+        else
+        {
+            Assert.Empty(interaction.MultiSelectionPromptCalls);
+        }
+        await Verify(ReadOutput(workspace)).UseParameters(allowMultipleValues, defaultValue);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task LocalTemplate_PromptsFromEngineMetadataAndRenders(bool includeMessage)
