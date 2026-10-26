@@ -449,6 +449,30 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal("daily", JsonNode.Parse(File.ReadAllText(settingsPath))!["channel"]!.GetValue<string>());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WriteSettingsFileAtomically_WritesOsLineBreaksAndSingleFinalNewline(bool existing)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        if (existing)
+        {
+            File.WriteAllText(settingsPath, "{" + LineEndingAssert.NonOsNewLine + "  \"channel\": \"stable\"" + LineEndingAssert.NonOsNewLine + "}");
+        }
+        var settings = new JsonObject
+        {
+            ["appHost"] = new JsonObject { ["path"] = "MyApp.csproj" },
+            ["channel"] = "daily"
+        };
+
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(settingsPath, settings, CancellationToken.None);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(settingsPath);
+        Assert.Equal("daily", JsonNode.Parse(File.ReadAllText(settingsPath))!["channel"]!.GetValue<string>());
+    }
+
     [Fact]
     public void TryNormalizeSettingsFile_RewritesNonOsLineBreaksWithOsLineBreaks()
     {

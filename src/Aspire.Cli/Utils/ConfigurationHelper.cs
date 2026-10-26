@@ -348,7 +348,10 @@ internal static class ConfigurationHelper
                 : new FileStream(temporaryPath, options))
             {
                 created = true;
-                await JsonSerializer.SerializeAsync(stream, settings, JsonSourceGenerationContext.Default.JsonObject, cancellationToken);
+                // Serialize to text rather than to the stream so the final newline is added the same way as in the
+                // other settings writers. Encoding.UTF8.GetBytes writes no byte order mark, like File.WriteAllText.
+                var jsonContent = EnsureFinalNewline(JsonSerializer.Serialize(settings, JsonSourceGenerationContext.Default.JsonObject));
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(jsonContent), cancellationToken);
             }
             if (!OperatingSystem.IsWindows() && destinationMode is { } mode)
             {
