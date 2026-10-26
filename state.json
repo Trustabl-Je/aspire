@@ -2,7 +2,7 @@
   "version": 1,
   "issue": 9672,
   "issue_url": "https://github.com/microsoft/aspire/issues/9672",
-  "phase": "worker-intent",
+  "phase": "worker",
   "created_at": "2026-10-26T22:23:06.019694+00:00",
   "base_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
   "control_sha": "9a4ab756620648f2f45e730591a69d224a9f495f",
@@ -85,7 +85,7 @@
     "reason": "Docker daemon unavailable on this Linux runner and no local test run was attempted within budget; hosted baseline needed to detect any reproduction."
   },
   "outcome": null,
-  "updated_at": "2026-10-26T22:41:55.412081+00:00",
+  "updated_at": "2026-10-26T22:42:02.301062+00:00",
   "transitions": [
     {
       "phase": "ready",
@@ -141,6 +141,11 @@
       "phase": "worker-intent",
       "reason": "Baseline 3/3 (project): previous clean baseline; continue the fixed policy without a model.",
       "at": "2026-10-26T22:41:55.412081+00:00"
+    },
+    {
+      "phase": "worker",
+      "reason": "Owned worker dispatched; original reports must pass independent validation.",
+      "at": "2026-10-26T22:42:02.301062+00:00"
     }
   ],
   "agent": {
@@ -185,6 +190,7 @@
     "runners": 3,
     "iterations": 3,
     "mode": "project",
-    "branch": "ankj/flaky-test-9672-run-3"
+    "branch": "ankj/flaky-test-9672-run-3",
+    "id": 40414430678
   }
 }
