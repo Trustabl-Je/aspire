@@ -11,6 +11,13 @@
       "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-1, Hosting-1, tests/Aspire.Hosting.Te... / Hosting-1 (windows-latest)",
       "pr_number": 0,
       "observed_at": "2026-10-15T16:23:41Z"
+    },
+    {
+      "run_id": 40386459442,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/40386459442",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-1, Hosting-1, tests/Aspire.Hosting.Te... / Hosting-1 (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-26T21:20:35Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21026"

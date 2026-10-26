@@ -1,0 +1,121 @@
+{
+  "run_id": 40386459442,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/40386459442",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-26T21:20:35Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "id": 121815361449,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40386459442/job/121815361449",
+      "classification": "flaky-test",
+      "reason": "Known flaky test failed with matching prior-cause diagnostic",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-1, Hosting-1, tests/Aspire.Hosting.Te... / Hosting-1 (windows-latest)",
+      "id": 121815369994,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40386459442/job/121815369994",
+      "classification": "flaky-test",
+      "reason": "Known flaky test failed with matching prior-cause diagnostic",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "id": 121815410065,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40386459442/job/121815410065",
+      "classification": "flaky-test",
+      "reason": "Known flaky test failed with matching prior-cause diagnostic",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions-node)",
+      "id": 121825933844,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/40386459442/job/121825933844",
+      "classification": "flaky-test",
+      "reason": "Known flaky test failed with matching prior-cause diagnostic",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Tests.DistributedApplicationTests.BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-1, Hosting-1, tests/Aspire.Hosting.Te... / Hosting-1 (windows-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 497\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in D:\\a\\aspire\\aspire\\tests\\Shared\\AsyncTestHelpers.cs:line 197\n   at Aspire.Hosting.Tests.DistributedApplicationTests.BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\DistributedApplicationTests.cs:line 365\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-10-26T20:06:49] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-10-26T20:06:49] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-10-26T20:06:49] Aspire.Hosting.DistributedApplication Information: Application host directory is: D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\n| [2026-10-26T20:06:49] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-10-26T20:06:49] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-10-26T20:06:49] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-10-26T20:06:49] Aspire.Hosting.ApplicationModel.ResourceNotificationService Debug: Waiting for resource 'before-start-event-explicit-start-serviceb' to match predicate.\n| [2026-10-26T20:06:49] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: C:\\Users\\runneradmin\\.aspire\\cli\\bch\\29Lw4tyIJ44wW0jX0WF.5940\n| [2026-10-26T20:06:49] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on C:\\Users\\runneradmin\\.aspire\\cli\\bch\\29Lw4tyIJ44wW0jX0WF.5940\n| [2026-10-26T20:06:54] Aspire.Hosting.Dcp.DcpHost Warning: No trusted Aspire development certificate was found. See https://aka.ms/aspire/devcerts for more information.\n| [2026-10-26T20:06:54] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpwca4qw4j.cmq\n| [2026-10-26T20:06:54] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 5940 --detach --kubeconfig \"C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpwca4qw4j.cmq\\kubeconfig\"\n| [2026-10-26T20:06:54] Aspire.Hosting.Dcp.DcpHost Debug: A complete bundled ConPTY provider was not found; DCP will use the inbox Windows provider.\n| [2026-10-26T20:06:55] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: False\n| [2026-10-26T20:06:55] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource before-start-event-explicit-start-servicea/before-start-event-explicit-start-servicea-npeseqzd-1d15bdd8 update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-10-26T20:06:55] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource before-start-event-explicit-start-servicea-rebuilder/before-start-event-explicit-start-servicea-rebuilder-yafcwqmj-1d15bdd8 update published: ResourceType = Executable, CreationTimeStamp = (null), State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { resource.parentName = before-start-event-explicit-start-servicea-npeseqzd-1d15bdd8 }, HealthReports = {  }, Commands = {  }\n| [2026-10-26T20:06:55] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource before-start-event-explicit-start-serviceb/before-start-event-explicit-start-serviceb-jrgegxvj-1d15bdd8 update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-10-26T20:06:55] A",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches known flaky prior cause; test ran and failed with the same transient diagnostic"
+    },
+    {
+      "name": "Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostSubcommandStopsWhenOwningAppHostIsGone",
+      "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "error": "aspire-managed exited with code 124.\nstdout: \nstderr:",
+      "stack_trace": "at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 241\n   at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 254\n   at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 266\n   at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostSubcommandStopsWhenOwningAppHostIsGone() in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 99\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches known flaky prior cause; test ran and failed with the same transient diagnostic"
+    },
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.DenoFunctionalTests.VerifyDenoAppDirectExecutionWorks",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.DenoAppFixture' threw in InitializeAsync\n---- System.IO.InvalidDataException : Service denoscript should have valid address at this point",
+      "stack_trace": "----- Inner Stack Trace -----\n   at Aspire.Hosting.Dcp.DcpModelUtilities.TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, Boolean allowPending, Nullable`1 fallbackPort) in /_/src/Aspire.Hosting/Dcp/DcpModelUtilities.cs:line 186\n   at Aspire.Hosting.Dcp.DcpModelUtilities.TryAddWorkloadAllocatedEndpoints[TDcpResource](RenderedModelResource`1 resource, Boolean enableAspireContainerTunnel, String containerHostName) in /_/src/Aspire.Hosting/Dcp/DcpModelUtilities.cs:line 129\n   at Aspire.Hosting.Dcp.DcpExecutor.<>c__DisplayClass36_1.<<RunApplicationAsync>b__4>d.MoveNext() in /_/src/Aspire.Hosting/Dcp/DcpExecutor.cs:line 220\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Dcp.DcpExecutor.<>c__DisplayClass36_1.<<RunApplicationAsync>b__6>d.MoveNext() in /_/src/Aspire.Hosting/Dcp/DcpExecutor.cs:line 266\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Dcp.DcpExecutor.RunApplicationAsync(CancellationToken ct) in /_/src/Aspire.Hosting/Dcp/DcpExecutor.cs:line 272\n   at Aspire.Hosting.Orchestrator.ApplicationOrchestrator.RunApplicationAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/ApplicationOrchestrator.cs:line 626\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 41\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 485\n   at Aspire.Hosting.JavaScript.Tests.",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches known flaky prior cause; test ran and failed with the same transient diagnostic"
+    },
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.DenoFunctionalTests.VerifyDenoAppTaskScriptWorks",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.DenoAppFixture' threw in InitializeAsync\n---- System.IO.InvalidDataException : Service denoscript should have valid address at this point",
+      "stack_trace": "----- Inner Stack Trace -----\n   at Aspire.Hosting.Dcp.DcpModelUtilities.TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, Boolean allowPending, Nullable`1 fallbackPort) in /_/src/Aspire.Hosting/Dcp/DcpModelUtilities.cs:line 186\n   at Aspire.Hosting.Dcp.DcpModelUtilities.TryAddWorkloadAllocatedEndpoints[TDcpResource](RenderedModelResource`1 resource, Boolean enableAspireContainerTunnel, String containerHostName) in /_/src/Aspire.Hosting/Dcp/DcpModelUtilities.cs:line 129\n   at Aspire.Hosting.Dcp.DcpExecutor.<>c__DisplayClass36_1.<<RunApplicationAsync>b__4>d.MoveNext() in /_/src/Aspire.Hosting/Dcp/DcpExecutor.cs:line 220\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Dcp.DcpExecutor.<>c__DisplayClass36_1.<<RunApplicationAsync>b__6>d.MoveNext() in /_/src/Aspire.Hosting/Dcp/DcpExecutor.cs:line 266\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Dcp.DcpExecutor.RunApplicationAsync(CancellationToken ct) in /_/src/Aspire.Hosting/Dcp/DcpExecutor.cs:line 272\n   at Aspire.Hosting.Orchestrator.ApplicationOrchestrator.RunApplicationAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/ApplicationOrchestrator.cs:line 626\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 41\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 485\n   at Aspire.Hosting.JavaScript.Tests.",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches known flaky prior cause; test ran and failed with the same transient diagnostic"
+    },
+    {
+      "name": "Aspire Node Functions debugger E2E starts Core Tools, attaches pwa-node, hits an HTTP breakpoint and cleans up the worker",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions-node)",
+      "error": "Failed to apply E2E control revision 1793046312062: Error: Timed out after 300000ms waiting for breakpoint in /tmp/aev-KoO1R3/workspace/AspireE2E.NodeFunctionsDebugger/Program.cs:4. Last error: <none>.\nDiagnostics:\n{\n  \"supportedCapabilities\": [\n    \"prompting\",\n    \"baseline.v1\",\n    \"secret-prompts.v1\",\n    \"file-pickers.v1\",\n    \"message-actions.v1\",\n    \"build-dotnet-using-cli\",\n    \"apphost-log-output.v1\",\n    \"project\",\n    \"project-with-external-build.v1\",\n    \"ms-dotnettools.csharp\",\n    \"node\",\n    \"deno.v1\",\n    \"browser\",\n    \"azure-functions-node\",\n    \"deno\"\n  ],\n  \"debugSessions\": [\n    {\n      \"id\": \"6556ecd1-412f-4882-84ea-856a4a46b65d\",\n      \"type\": \"aspire\",\n      \"name\": \"Aspire run: AspireE2E.NodeFunctionsDebugger/AspireE2E.NodeFunctionsDebugger.csproj\",\n      \"configuration\": {\n        \"type\": \"aspire\",\n        \"name\": \"Aspire run: AspireE2E.NodeFunctionsDebugger/AspireE2E.NodeFunctionsDebugger.csproj\",\n        \"request\": \"launch\",\n        \"program\": \"/tmp/aev-KoO",
+      "stack_trace": "Error: Failed to apply E2E control revision 1793046312062: Error: Timed out after 300000ms waiting for breakpoint in /tmp/aev-KoO1R3/workspace/AspireE2E.NodeFunctionsDebugger/Program.cs:4. Last error: <none>.\nDiagnostics:\n{\n  \"supportedCapabilities\": [\n    \"prompting\",\n    \"baseline.v1\",\n    \"secret-prompts.v1\",\n    \"file-pickers.v1\",\n    \"message-actions.v1\",\n    \"build-dotnet-using-cli\",\n    \"apphost-log-output.v1\",\n    \"project\",\n    \"project-with-external-build.v1\",\n    \"ms-dotnettools.csharp\",\n    \"node\",\n    \"deno.v1\",\n    \"browser\",\n    \"azure-functions-node\",\n    \"deno\"\n  ],\n  \"debugSessions\": [\n    {\n      \"id\": \"6556ecd1-412f-4882-84ea-856a4a46b65d\",\n      \"type\": \"aspire\",\n      \"name\": \"Aspire run: AspireE2E.NodeFunctionsDebugger/AspireE2E.NodeFunctionsDebugger.csproj\",\n      \"configuration\": {\n        \"type\": \"aspire\",\n        \"name\": \"Aspire run: AspireE2E.NodeFunctionsDebugger/AspireE2E.NodeFunctionsDebugger.csproj\",\n        \"request\": \"launch\",\n        \"program\": \"/tmp/aev-KoO1R3/workspace/AspireE2E.NodeFunctionsDebugger/AspireE2E.NodeFunctionsDebugger.csproj\",\n        \"command\": \"run\",\n        \"noDebug\": false,\n        \"__aspireAppHostSelectionOrigin\": \"user-selection\",\n        \"__aspireAppHostLaunchToken\": 1,\n        \"__aspireAppHostLaunchReservationId\": \"1\",\n        \"resolvedCliPath\": \"/tmp/aev-KoO1R3/cli/aspire\"\n      }\n    }\n  ],\n  \"launchRequests\": [\n    {\n      \"sessionId\": \"6556ecd1-412f-4882-84ea-856a4a46b65d\",\n      \"sessionType\": \"aspire\",\n      \"sessionName\": \"Aspire run: AspireE2E.NodeFunctionsDebugger/AspireE2E.NodeFunctionsDebugger.csproj\",\n      \"arguments\": {\n        \"type\": \"aspire\",\n        \"name\": \"Aspire run: AspireE2E.NodeFunctionsDebugger/AspireE2E.NodeFunctionsDebugger.csproj\",\n        \"request\": \"launch\",\n        \"program\": \"/tmp/aev-KoO1R3/workspace/AspireE2E.NodeFunctionsDebugger/AspireE2E.NodeFunctionsDebugger.csproj\",\n        \"command\": \"run\",\n        \"noDebug\": false,\n        \"__aspireAppHostSelectionOrigin\": \"user-selec",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches known flaky prior cause; test ran and failed with the same transient diagnostic"
+    }
+  ],
+  "causes": [
+    "aspire-hosting-tests-beforeresourcestartedevent-stopasync-taskcanceled",
+    "aspire-managed-tests-terminalhostsignal-stopswhenowningapphostisgone-timeout",
+    "hosting-javascript-denoappfixture-directexecution-invalidaddress",
+    "hosting-javascript-denoappfixture-taskscript-invalidaddress",
+    "vscode-e2e-linux-azure-functions-node-breakpoint-timeout"
+  ]
+}
