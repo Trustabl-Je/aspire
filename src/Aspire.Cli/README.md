@@ -92,12 +92,13 @@ Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
 
-## Configured template directories
+## Configured template sources
 
-Register named local template sources in the CLI's global configuration:
+Register named local directories or Git repositories in the CLI's global configuration:
 
 ```bash
 aspire config set templates.company /absolute/path/to/company-templates --global
+aspire config set templates.examples https://github.com/microsoft/aspire-templates --global
 ```
 
 This writes the following shape to the global `~/.aspire/aspire.config.json` file:
@@ -105,16 +106,33 @@ This writes the following shape to the global `~/.aspire/aspire.config.json` fil
 ```json
 {
   "templates": {
-    "company": "/absolute/path/to/company-templates"
+    "company": "/absolute/path/to/company-templates",
+    "examples": "https://github.com/microsoft/aspire-templates"
   }
 }
 ```
 
 Use an absolute path on your platform (for example, `C:\Templates` on Windows).
-Each directory can contain one or more .NET template-engine templates using
-`.template.config/template.json`. Project-level `templates` settings are not used.
-Git repositories and searchable endpoints are not supported as configured sources yet;
-the existing explicit `--template-repository` and `--template-path` options are unchanged.
+Local directories and Git repositories can contain one or more .NET template-engine
+templates using `.template.config/template.json`, including templates in subdirectories.
+Project-level `templates` settings are not used.
+
+Repository strings must be HTTPS or SSH URLs, for example
+`https://github.com/microsoft/aspire-templates` or
+`ssh://git@github.com/microsoft/aspire-templates.git`.
+SCP-style addresses such as `git@github.com:owner/repo.git`, other URL schemes,
+query strings, and fragments are not accepted. HTTPS URLs must not contain user
+information; SSH URLs may contain a username but no password.
+Use Git's existing credential helper or SSH authentication rather than storing credentials
+in a template source. The CLI must be able to access the repository without an
+interactive Git credential prompt.
+
+Each search resolves the repository's default `HEAD` to a commit and reuses a cached
+checkout of that commit, cloning only when it is not already cached. Generation uses
+the selected checkout even if the remote subsequently changes. Repository objects
+with explicit `ref`/`path` and searchable endpoints are not supported yet; the existing
+explicit `--template-repository`, `--template-repository-ref`, and `--template-path`
+options are unchanged.
 
 Run `aspire new` interactively and select **Search for more templates** beneath the
 default templates. Enter text to search template names and descriptions, or leave
@@ -124,9 +142,11 @@ create a project with the normal local-template parameter prompts.
 Configured templates cannot be combined with `--source`, `--version`, `--channel`,
 or `--language`; package/version choices are owned by the template.
 
-Directories are scanned only when searching. A source that cannot be read produces
-a warning without blocking other sources. You can search again or return to the
-default templates without creating project files.
+Directories are scanned and repositories are acquired only when searching, not when
+displaying help or the default picker. Repository resolution and cloning show progress.
+A source that cannot be read, resolved, authenticated, or cloned produces a warning
+without blocking other sources. Cancellation stops the search. You can search again
+or return to the default templates without creating project files.
 
 ## Examples
 

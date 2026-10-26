@@ -42,9 +42,9 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string SearchingTemplateSources {
+        internal static string SearchingTemplateSource {
             get {
-                return ResourceManager.GetString("SearchingTemplateSources", resourceCulture);
+                return ResourceManager.GetString("SearchingTemplateSource", resourceCulture);
             }
         }
 
@@ -84,9 +84,9 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string TemplateSourceMustBeAbsolutePath {
+        internal static string InvalidConfiguredTemplateSource {
             get {
-                return ResourceManager.GetString("TemplateSourceMustBeAbsolutePath", resourceCulture);
+                return ResourceManager.GetString("InvalidConfiguredTemplateSource", resourceCulture);
             }
         }
 

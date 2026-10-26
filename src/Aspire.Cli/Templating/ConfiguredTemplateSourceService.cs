@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -22,7 +23,8 @@ internal sealed class ConfiguredTemplateSourceService(
         {
             using var settings = JsonDocument.Parse(
                 await File.ReadAllTextAsync(settingsPath, cancellationToken), ConfigurationHelper.ParseOptions);
-            // Global configuration uses named sources: { "templates": { "company": "/absolute/path" } }.
+            // Named sources can be paths or URLs, e.g.
+            // { "templates": { "local": "/absolute/path", "remote": "https://host/repo" } }.
             // Read the JSON directly to preserve value types and avoid project-config overrides.
             if (settings.RootElement.ValueKind is not JsonValueKind.Object)
             {
@@ -45,15 +47,26 @@ internal sealed class ConfiguredTemplateSourceService(
                 cancellationToken.ThrowIfCancellationRequested();
                 if (string.IsNullOrWhiteSpace(entry.Name) ||
                     entry.Value.ValueKind is not JsonValueKind.String ||
-                    entry.Value.GetString() is not { } path ||
-                    string.IsNullOrWhiteSpace(path) ||
-                    !Path.IsPathFullyQualified(path))
+                    entry.Value.GetString() is not { } value ||
+                    string.IsNullOrWhiteSpace(value) ||
+                    value.Any(char.IsControl))
                 {
-                    Warn(entry.Name, NewCommandStrings.TemplateSourceMustBeAbsolutePath);
+                    Warn(entry.Name, NewCommandStrings.InvalidConfiguredTemplateSource);
                     continue;
                 }
 
-                sources.Add(new(entry.Name, new TemplateSource(path, null, null)));
+                if (Path.IsPathFullyQualified(value))
+                {
+                    sources.Add(new(entry.Name, new TemplateSource(value, null, null)));
+                }
+                else if (GitRepositoryUrl.IsValid(value))
+                {
+                    sources.Add(new(entry.Name, new TemplateSource(".", value, null)));
+                }
+                else
+                {
+                    Warn(entry.Name, NewCommandStrings.InvalidConfiguredTemplateSource);
+                }
             }
 
             return sources;
@@ -86,7 +99,21 @@ internal sealed class ConfiguredTemplateSourceService(
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
+                var status = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.SearchingTemplateSource, name);
+                IEnumerable<ITemplate> templates;
+                if (source.Repository is null)
+                {
+                    templates = await interactionService.ShowStatusAsync(status,
+                        () => templateProvider.GetTemplatesAsync(source, cancellationToken));
+                }
+                else
+                {
+                    // The Git acquisition path owns its resolve/clone spinners. An enclosing
+                    // status would hide those stages behind a generic search spinner.
+                    interactionService.DisplaySubtleMessage(status);
+                    templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
+                }
+
                 results.AddRange(templates
                     .Where(template => template.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         template.Description.Contains(query, StringComparison.OrdinalIgnoreCase))

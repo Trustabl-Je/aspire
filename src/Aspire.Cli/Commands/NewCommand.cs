@@ -373,8 +373,7 @@ internal sealed class NewCommand : BaseCommand
         {
             var query = await InteractionService.PromptForStringAsync(
                 NewCommandStrings.TemplateSearchPrompt, cancellationToken: cancellationToken);
-            var templates = await InteractionService.ShowStatusAsync(NewCommandStrings.SearchingTemplateSources,
-                () => _configuredTemplateSources.SearchAsync(query, cancellationToken));
+            var templates = await _configuredTemplateSources.SearchAsync(query, cancellationToken);
             if (templates.Count == 0)
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, NewCommandStrings.NoMatchingConfiguredTemplates);

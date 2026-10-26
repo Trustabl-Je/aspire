@@ -81,7 +81,23 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("\" \"")]
     [InlineData("\"\"")]
     [InlineData("\"relative/path\"")]
-    [InlineData("\"https://github.com/microsoft/aspire-templates\"")]
+    [InlineData("\"http://example.test/templates.git\"")]
+    [InlineData("\"git://example.test/templates.git\"")]
+    [InlineData("\"file:///templates\"")]
+    [InlineData("\"ext::command\"")]
+    [InlineData("\"--upload-pack=command\"")]
+    [InlineData("\"git@example.test:templates.git\"")]
+    [InlineData("\"https://user:password@example.test/templates\"")]
+    [InlineData("\"https://token@example.test/templates\"")]
+    [InlineData("\"ssh://git:password@example.test/templates\"")]
+    [InlineData("\"https://example.test/templates?q={search}\"")]
+    [InlineData("\"https://example.test/templates#main\"")]
+    [InlineData("\"https:///templates\"")]
+    [InlineData("\"https:example.test/templates\"")]
+    [InlineData("\"ssh:///templates\"")]
+    [InlineData("\"https://example.test\\\\templates\"")]
+    [InlineData("\"https://example.test/templates with spaces\"")]
+    [InlineData("\"https://example.test/templates\\n\"")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": "main" }""")]
     public async Task ConfiguredSources_InvalidEntryDoesNotHideValidSources(string invalidValue)
     {
@@ -106,7 +122,7 @@ public partial class NewCommandLocalTemplateTests
         var warning = Assert.Single(interaction.DisplayedMessages);
         Assert.Equal(KnownEmojis.Warning, warning.Emoji);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed,
-            "broken", NewCommandStrings.TemplateSourceMustBeAbsolutePath), warning.Message);
+            "broken", NewCommandStrings.InvalidConfiguredTemplateSource), warning.Message);
     }
 
     [Theory]

@@ -52,6 +52,11 @@
         <target state="translated">Escriba el nombre del proyecto</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidConfiguredTemplateSource">
+        <source>Template sources must have a nonempty name and an absolute directory path or an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. Repository objects and searchable endpoints are not supported yet.</source>
+        <target state="new">Template sources must have a nonempty name and an absolute directory path or an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. Repository objects and searchable endpoints are not supported yet.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InvalidProjectName">
         <source>Invalid project name.</source>
         <target state="translated">Nombre de proyecto no válido.</target>
@@ -88,8 +93,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoConfiguredTemplateSources">
-        <source>No usable template sources are configured. Add an absolute directory path with 'aspire config set templates.&lt;name&gt; &lt;path&gt; --global'.</source>
-        <target state="new">No usable template sources are configured. Add an absolute directory path with 'aspire config set templates.&lt;name&gt; &lt;path&gt; --global'.</target>
+        <source>No usable template sources are configured. Add an absolute directory path or an HTTPS or SSH Git repository URL with 'aspire config set templates.&lt;name&gt; &lt;path-or-url&gt; --global'.</source>
+        <target state="new">No usable template sources are configured. Add an absolute directory path or an HTTPS or SSH Git repository URL with 'aspire config set templates.&lt;name&gt; &lt;path-or-url&gt; --global'.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
@@ -162,9 +167,9 @@
         <target state="new">Search again</target>
         <note />
       </trans-unit>
-      <trans-unit id="SearchingTemplateSources">
-        <source>Searching configured template sources...</source>
-        <target state="new">Searching configured template sources...</target>
+      <trans-unit id="SearchingTemplateSource">
+        <source>Searching template source '{0}'...</source>
+        <target state="new">Searching template source '{0}'...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -255,11 +260,6 @@
       <trans-unit id="TemplateSearchPrompt">
         <source>Search templates (leave empty to list all)</source>
         <target state="new">Search templates (leave empty to list all)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TemplateSourceMustBeAbsolutePath">
-        <source>Template sources must have a nonempty name and an absolute directory path. Git and endpoint sources are not supported in global configuration yet.</source>
-        <target state="new">Template sources must have a nonempty name and an absolute directory path. Git and endpoint sources are not supported in global configuration yet.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceSearchFailed">
