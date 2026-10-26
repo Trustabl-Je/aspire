@@ -776,10 +776,8 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Init_ExistingBindingChecksWithoutReapplyingOrRetargeting(bool legacy)
+    [Fact]
+    public async Task Init_ExistingBindingChecksWithoutReapplyingOrRetargeting()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string command = "init --file-based --language csharp --suppress-agent-init --use-config-source true --non-interactive";
@@ -788,12 +786,6 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(CliExitCodes.Success, await original.GetRequiredService<RootCommand>().Parse(command).InvokeAsync().DefaultTimeout());
         }
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        if (legacy)
-        {
-            var legacyPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
-            File.Move(path, legacyPath, overwrite: true);
-            path = legacyPath;
-        }
         await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/llms.txt");
         var services = CreateCreationServices(workspace);
         services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>

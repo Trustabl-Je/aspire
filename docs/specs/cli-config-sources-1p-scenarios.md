@@ -269,7 +269,7 @@ A successful explicit fetch records the fetch time even if the source-file versi
 
 If authentication expires, Maya repairs Git access, verifies it with `git ls-remote`, and retries. If acquisition or validation fails during an explicit update, the update exits nonzero and preserves the previous app configuration, applied version, and fetched tracking copy. This is different from an advisory check failure.
 
-`aspire update --config-source` is not a way to enable a source on an unbound project. That operation fails without a saved binding, and the option cannot be combined with CLI self-update, migration, or channel/package-source overrides. A legacy binding without an applied version gets instructions to run this explicit update rather than having source values silently loaded.
+`aspire update --config-source` is not a way to enable a source on an unbound project. That operation fails without a saved binding, and the option cannot be combined with CLI self-update, migration, or channel/package-source overrides. A binding without an applied version gets instructions to run this explicit update rather than having source values silently loaded. Configuration sources are not supported in legacy `.aspire/settings.json` files.
 
 ## Scenario 6: Priya explicitly selects a team configuration during initialization
 

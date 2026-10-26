@@ -13,7 +13,9 @@ This specification focuses on the first phase. Content acquisition is summarized
 
 The application's `aspire.config.json` is the runtime configuration, including values previously copied from a source. Normal CLI configuration precedence and explicit parent-setting inheritance continue to apply. The source is not an additional runtime configuration provider, and ordinary commands never load the cached source JSON to supply settings.
 
-The `configSource` binding itself is not copied or inherited into a child configuration. Source checks and explicit refresh inspect the nearest local settings file found from the selected project's directory and the global settings file, matching normal configuration loading. Existing modern/legacy local-file discovery determines the nearest file; do not continue to farther ancestors when that file has no binding. Each binding belongs to the file that declares it, and refresh updates that file only. Global and local settings remain separate, with local values taking precedence at runtime.
+The `configSource` binding itself is not copied or inherited into a child configuration. Source checks and explicit refresh inspect the nearest local settings file found from the selected project's directory and the global settings file, matching normal configuration loading. Existing local-file discovery determines the nearest file; do not continue to farther ancestors when that file has no binding. Each binding belongs to the file that declares it, and refresh updates that file only. Global and local settings remain separate, with local values taking precedence at runtime.
+
+Configuration sources are supported in modern `aspire.config.json` files, not legacy configurations such as `.aspire/settings.json`. This feature does not add legacy migration or compatibility handling. Existing shared discovery behavior is unchanged; incidental behavior with legacy files is not a supported contract.
 
 Source-driven writes to the app configuration and the user-directory tracking copy happen only during initial materialization by `aspire new` or `aspire init`, or an explicit `aspire update --config-source`. Other commands may check for updates and report their availability, but must not apply them. This restriction does not prohibit explicit local configuration edits or a command's unrelated project bookkeeping.
 
@@ -85,7 +87,7 @@ Use configuration from this source?
 - **Decline:** continue normally, without Git acquisition or a `configSource` entry.
 - **Cancel:** stop without creating the application.
 
-The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` without repeating the prompt. Initialization checks the target directory's modern configuration first, falling back to its legacy `.aspire/settings.json` only when the modern file is absent; it does not reuse an ancestor's binding. An environment variable or employee detection alone never enables a source.
+The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` without repeating the prompt. Initialization checks the target directory's `aspire.config.json`; it does not reuse an ancestor's binding. An environment variable or employee detection alone never enables a source.
 
 In C# solution mode, `aspire init` explicitly manages `aspire.config.json` in the solution directory for source selection, advisory checks, and materialization. An existing solution-root binding is reused without renewed consent or reapplying source values, even when the initialization environment proposes another source. Initialization does not create a second source binding in the generated AppHost directory. This is explicit configuration-file selection, not inheritance of the source binding. File-based and polyglot initialization use the working-directory configuration.
 
@@ -297,7 +299,7 @@ For ordinary commands, verify the exact 24-hour check boundary, cached availabil
 
 For explicit updates, cover fresh/missing tracking, unchanged source versions, `--apphost` selection, non-interactive confirmation, incompatible options, missing bindings, and bindings without an applied version. Verify that updating one app does not alter another app's settings or applied-version comparison, including on another machine with no tracking copy. Confirm no CLI/SDK/package updates, code regeneration, or content reinstallation.
 
-Cover nearest-local and global bindings independently and together, including no local file, an unbound nearest modern or legacy file that hides a farther ancestor binding, a nonstandard global file path, and local/global paths identifying the same file. Verify serial acquisition, shared-source deduplication and cache freshness across differing applied versions, preservation of unrelated files, and failure/cancellation after an earlier successful refresh.
+Cover nearest-local and global bindings independently and together, including no local file, an unbound nearest modern file that hides a farther ancestor binding, a nonstandard global file path, and local/global paths identifying the same file. Verify serial acquisition, shared-source deduplication and cache freshness across differing applied versions, preservation of unrelated files, and failure/cancellation after an earlier successful refresh.
 
 Keep no-source, declined-source, global-command, help, and completion paths free of source acquisition/checks. Verify plain `aspire update` does not implicitly materialize configuration-source changes.
 

@@ -23,13 +23,11 @@ namespace Aspire.Cli.Tests.Configuration;
 public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData(false, false, true)]
-    [InlineData(true, false, true)]
-    [InlineData(false, true, true)]
-    [InlineData(true, true, true)]
-    [InlineData(false, false, false)]
-    [InlineData(true, false, false)]
-    public async Task CheckProject_ChecksGlobalSourceWithoutSearchingPastNearestConfiguration(bool force, bool legacy, bool localFileExists)
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    public async Task CheckProject_ChecksGlobalSourceWithoutSearchingPastNearestConfiguration(bool force, bool localFileExists)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var project = workspace.CreateDirectory("project");
@@ -38,9 +36,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var globalFile = new FileInfo(Path.Combine(global.FullName, "custom-global.json"));
         File.Move(Path.Combine(global.FullName, AspireConfigFile.FileName), globalFile.FullName);
         var originalGlobal = await File.ReadAllTextAsync(globalFile.FullName);
-        var localPath = legacy
-            ? Path.Combine(project.CreateSubdirectory(".aspire").FullName, "settings.json")
-            : Path.Combine(project.FullName, AspireConfigFile.FileName);
+        var localPath = Path.Combine(project.FullName, AspireConfigFile.FileName);
         const string localConfiguration = """{"custom":"keep"}""";
         string? originalParent = null;
         var parentPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
@@ -117,40 +113,6 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(force ? 1 : 0, git.Calls);
         Assert.Equal(force ? 0 : 1, git.CheckCalls);
         Assert.Single(interaction.DisplayedMessages);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CheckProject_UsesNearestLegacyConfigurationWithoutCreatingModernFile(bool force)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
-        var modernPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        var legacyPath = Path.Combine(workspace.CreateDirectory(".aspire").FullName, "settings.json");
-        File.Move(modernPath, legacyPath, overwrite: true);
-        var original = await File.ReadAllTextAsync(legacyPath);
-        var git = new TestConfigSourceGitClient
-        {
-            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject())),
-            Check = (_, _) => Task.FromResult(("commit-2", "version-2"))
-        };
-        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
-
-        await service.CheckProjectAsync(workspace.WorkspaceRoot, force, CancellationToken.None);
-
-        Assert.Equal(force ? 1 : 0, git.Calls);
-        Assert.Equal(force ? 0 : 1, git.CheckCalls);
-        Assert.False(File.Exists(modernPath));
-        var actual = await File.ReadAllTextAsync(legacyPath);
-        if (force)
-        {
-            Assert.Equal("version-2", JsonNode.Parse(actual)!["configSource"]!["appliedVersion"]!.GetValue<string>());
-        }
-        else
-        {
-            Assert.Equal(original, actual);
-        }
     }
 
     [Theory]
@@ -1329,20 +1291,12 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal("commit-2", metadata.Commit);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Initialization_ExistingBindingDoesNotRequireConsentOrReapplySettings(bool legacy)
+    [Fact]
+    public async Task Initialization_ExistingBindingDoesNotRequireConsentOrReapplySettings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        if (legacy)
-        {
-            var legacyPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
-            File.Move(path, legacyPath, overwrite: true);
-            path = legacyPath;
-        }
         await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/llms.txt");
         var original = await File.ReadAllTextAsync(path);
         var git = new TestConfigSourceGitClient();
@@ -1361,23 +1315,20 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, detector.Calls);
         Assert.Equal(0, git.Calls);
         Assert.Equal(1, git.CheckCalls);
-        Assert.Equal(!legacy, File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        Assert.True(File.Exists(path));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Initialization_DoesNotReuseAncestorOrShadowedLegacyBinding(bool unboundModernFile)
+    public async Task Initialization_DoesNotReuseAncestorBinding(bool unboundModernFile)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var project = workspace.CreateDirectory("project");
         if (unboundModernFile)
         {
-            await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, project, CancellationToken.None);
             var modernPath = Path.Combine(project.FullName, AspireConfigFile.FileName);
-            var legacyPath = Path.Combine(project.CreateSubdirectory(".aspire").FullName, "settings.json");
-            File.Move(modernPath, legacyPath);
             await File.WriteAllTextAsync(modernPath, "{}");
         }
         var git = new TestConfigSourceGitClient();
@@ -1488,7 +1439,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CheckProject_LegacyBindingRequiresExplicitUpdate()
+    public async Task CheckProject_BindingWithoutAppliedVersionRequiresExplicitUpdate()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
