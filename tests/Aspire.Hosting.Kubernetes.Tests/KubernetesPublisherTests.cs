@@ -19,26 +19,207 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task BrowserOriginInputsKeepDistinctEndpointIdentities()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var first = builder.AddContainer("a-b", "image").WithHttpEndpoint(name: "c", targetPort: 80)
+            .WithExternalHttpEndpoints().WithComputeEnvironment(environment);
+        var second = builder.AddContainer("a", "image").WithHttpEndpoint(name: "b-c", targetPort: 80)
+            .WithExternalHttpEndpoints().WithComputeEnvironment(environment);
+        environment.AddIngress("first-ingress").WithPath("first.example", "/", first.GetEndpoint("c"));
+        environment.AddIngress("second-ingress").WithPath("second.example", "/", second.GetEndpoint("b-c"));
+        var consumer = builder.AddContainer("consumer", "image").WithComputeEnvironment(environment)
+            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins.First)
+            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins.First)
+            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins.First);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var target = Assert.IsType<KubernetesResource>(consumer.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        var firstInput = target.EnvironmentVariables["FIRST"].ParameterSource!;
+        var secondInput = target.EnvironmentVariables["SECOND"].ParameterSource!;
+        Assert.NotSame(firstInput, secondInput);
+        Assert.NotEqual(firstInput.Name, secondInput.Name);
+        Assert.Same(firstInput, target.EnvironmentVariables["REPEATED"].ParameterSource);
+        Assert.Equal("http://first.example", await firstInput.GetValueAsync(default));
+        Assert.Equal("http://second.example", await secondInput.GetValueAsync(default));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BrowserOriginDefaultsFollowConfiguredPublicRoutes(bool gateway, bool tls)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var endpoint = web.GetEndpoint("http");
+        if (gateway)
+        {
+            var route = environment.AddGateway("public").WithGatewayClass("test")
+                .WithHostname("public.example").WithHostname("alias.example").WithRoute("/app", endpoint);
+            if (tls)
+            {
+                route.WithTls("certificate");
+            }
+        }
+        else
+        {
+            var route = environment.AddIngress("public").WithIngressClass("test")
+                .WithHostname("public.example").WithHostname("alias.example").WithPath("/app", endpoint);
+            if (tls)
+            {
+                route.WithTls("certificate");
+            }
+        }
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("FIRST", endpoint.BrowserOrigins.First)
+            .WithEnvironment("ORIGINS", endpoint.BrowserOrigins.Join())
+            .WithEnvironment("JSON", endpoint.BrowserOrigins.AsJson());
+        using var app = builder.Build();
+
+        app.Run();
+
+        var scheme = tls ? "https" : "http";
+        var consumer = Assert.IsType<KubernetesResource>(builder.Resources.Single(resource => resource.Name == "consumer").GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        Assert.Equal($"{scheme}://public.example", await consumer.EnvironmentVariables["FIRST"].ParameterSource!.GetValueAsync(default));
+        Assert.Equal($"{scheme}://public.example,{scheme}://alias.example", await consumer.EnvironmentVariables["ORIGINS"].ParameterSource!.GetValueAsync(default));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml").UseParameters(gateway, tls);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task BrowserOriginDefaultsUseOnlyMatchingHostScopedRoutes(bool gateway, bool tls)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var other = builder.AddContainer("other", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        if (gateway)
+        {
+            var route = environment.AddGateway("public").WithGatewayClass("test").WithHostname("inherited.example")
+                .WithRoute("web.example", "/", web.GetEndpoint("http"))
+                .WithRoute("other.example", "/", other.GetEndpoint("http"))
+                .WithRoute("web.example", "/duplicate", web.GetEndpoint("http"));
+            if (tls)
+            {
+                route.WithTls("certificate");
+            }
+        }
+        else
+        {
+            var route = environment.AddIngress("public").WithHostname("inherited.example")
+                .WithPath("web.example", "/", web.GetEndpoint("http"))
+                .WithPath("other.example", "/", other.GetEndpoint("http"))
+                .WithPath("web.example", "/duplicate", web.GetEndpoint("http"));
+            if (tls)
+            {
+                route.WithTls("certificate");
+            }
+        }
+        var consumer = builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins.AsJson());
+        using var app = builder.Build();
+
+        app.Run();
+
+        var target = Assert.IsType<KubernetesResource>(consumer.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        var parameter = target.EnvironmentVariables["ORIGINS"].ParameterSource!;
+        Assert.Equal("[\"http://web.example\"]", await parameter.GetValueAsync(default));
+    }
+
+    [Fact]
+    public async Task BrowserOriginDefaultsAllowConfiguredOverride()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        environment.AddIngress("public").WithHostname("public.example").WithPath("/", web.GetEndpoint("http"));
+        builder.Configuration["Parameters:web-http-BrowserOrigin"] = "https://override.example";
+        builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First);
+        using var app = builder.Build();
+
+        app.Run();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("*.example")]
+    [InlineData("example/path")]
+    [InlineData("user@example")]
+    [InlineData("example?query")]
+    [InlineData("example#fragment")]
+    [InlineData("example:8080")]
+    [InlineData("example:80")]
+    [InlineData("example:443")]
+    [InlineData("parameter")]
+    public void BrowserOriginsWithoutConcretePublicHostRequireInput(string? hostname)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var ingress = environment.AddIngress("public").WithPath("/", web.GetEndpoint("http"));
+        if (hostname == "parameter")
+        {
+            ingress.WithHostname(builder.AddParameter("hostname", "public.example"));
+        }
+        else if (hostname is not null)
+        {
+            ingress.WithHostname(hostname);
+        }
+        builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var parameter = Assert.Single(environment.Resource.CapturedHelmValues, value => value.Parameter.Name == "web-http-BrowserOrigin").Parameter;
+        Assert.Null(parameter.Default);
+        Assert.True(parameter.Required);
+    }
+
+    [Fact]
     public async Task BrowserUrlProjectionUsesPublisherExpression()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
-        builder.AddKubernetesEnvironment("env");
-        var publicHost = builder.AddParameter("public-host", "public.example", publishValueAsDefault: true);
+        var environment = builder.AddKubernetesEnvironment("env");
+        builder.Configuration["Parameters:frontend-http-BrowserOrigin"] = "https://public.example";
+        builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
+        builder.Configuration["Parameters:frontend-http-BrowserOriginsJson"] = "[\"https://public.example\",\"https://alias.example\"]";
         var frontend = builder.AddContainer("frontend", "nginx:alpine").WithHttpEndpoint(port: 8080, targetPort: 8080);
-        var origin = frontend.GetBrowserOrigin("http")
-            .WithPublishExpression(ReferenceExpression.Create($"https://{publicHost}"))
-            .ToReferenceExpression(builder.ExecutionContext);
+        var origin = frontend.GetEndpoint("http").BrowserOrigins.First;
         builder.AddContainer("backend", "nginx:alpine")
             .WithEnvironment("ORIGIN", origin)
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
+            .WithEnvironment("ORIGINS_JSON", frontend.GetEndpoint("http").BrowserOrigins.AsJson())
             .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origin}"));
         using var app = builder.Build();
 
         app.Run();
 
+        Assert.Empty(environment.Resource.CapturedHelmValueProviders);
+        Assert.Equal(3, environment.Resource.CapturedHelmValues.Select(value => value.Parameter).Distinct().Count());
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(workspace.Path, environment.Resource, cts.Token);
+
         await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates/backend/config.yaml")), "yaml")
-            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml");
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"))), "yaml");
     }
 
     [Theory]

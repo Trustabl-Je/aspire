@@ -1,8 +1,8 @@
 ﻿{
   "resources": {
-    "public-host": {
+    "frontend-http-BrowserOrigin": {
       "type": "parameter.v0",
-      "value": "{public-host.inputs.value}",
+      "value": "{frontend-http-BrowserOrigin.inputs.value}",
       "inputs": {
         "value": {
           "type": "string"
@@ -25,13 +25,17 @@
       "type": "container.v0",
       "image": "image:latest",
       "env": {
-        "ORIGIN": "{browser-frontend-preferred-origin-136c1e37de4e5761.connectionString}",
-        "CONFIG": "origin={browser-frontend-preferred-origin-136c1e37de4e5761.connectionString}"
+        "ORIGIN": "{frontend-http-BrowserOrigin-1.value}"
       }
     },
-    "browser-frontend-preferred-origin-136c1e37de4e5761": {
-      "type": "value.v0",
-      "connectionString": "https://{public-host.value}"
+    "frontend-http-BrowserOrigin-1": {
+      "type": "parameter.v0",
+      "value": "{frontend-http-BrowserOrigin-1.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
     }
   }
 }

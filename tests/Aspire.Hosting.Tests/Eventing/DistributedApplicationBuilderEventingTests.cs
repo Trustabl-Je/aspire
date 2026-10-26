@@ -15,54 +15,36 @@ namespace Aspire.Hosting.Tests.Eventing;
 [Trait("Partition", "6")]
 public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOutputHelper)
 {
-    [Theory]
-    [InlineData(EventDispatchBehavior.BlockingSequential)]
-    [InlineData(EventDispatchBehavior.BlockingConcurrent)]
-    [InlineData(EventDispatchBehavior.NonBlockingSequential)]
-    [InlineData(EventDispatchBehavior.NonBlockingConcurrent)]
-    public async Task EventPreparationCompletesBeforeObservers(EventDispatchBehavior dispatchBehavior)
+    [Fact]
+    public async Task NonBlockingConcurrentInvokesCallbacksBeforeReturning()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var prepared = false;
-        var observed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var preparationEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var completePreparation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        builder.Eventing.Subscribe<DummyEvent>((_, _) =>
-        {
-            observed.SetResult(prepared);
-            return Task.CompletedTask;
-        });
+        var entered = false;
+        var publisherThread = Environment.CurrentManagedThreadId;
+        var callbackThread = 0;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         builder.Eventing.Subscribe<DummyEvent>(async (_, ct) =>
         {
-            preparationEntered.SetResult();
-            await completePreparation.Task.WaitAsync(ct);
-            prepared = true;
-        }).IsPreparation = true;
+            callbackThread = Environment.CurrentManagedThreadId;
+            entered = true;
+            await release.Task.WaitAsync(ct);
+            completed.SetResult();
+        });
 
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
-        var publish = builder.Eventing.PublishAsync(new DummyEvent(), dispatchBehavior, cts.Token);
         try
         {
-            await preparationEntered.Task.DefaultTimeout();
-            if (dispatchBehavior is EventDispatchBehavior.NonBlockingSequential or EventDispatchBehavior.NonBlockingConcurrent)
-            {
-                await publish.DefaultTimeout();
-            }
-            else
-            {
-                Assert.False(publish.IsCompleted);
-            }
-
-            Assert.False(observed.Task.IsCompleted);
+            await builder.Eventing.PublishAsync(new DummyEvent(), EventDispatchBehavior.NonBlockingConcurrent, cts.Token).DefaultTimeout();
+            Assert.True(entered);
+            Assert.Equal(publisherThread, callbackThread);
+            Assert.False(completed.Task.IsCompleted);
         }
         finally
         {
-            completePreparation.SetResult();
+            release.SetResult();
+            await completed.Task.DefaultTimeout();
         }
-        await publish.DefaultTimeout();
-
-        Assert.True(await observed.Task.DefaultTimeout());
     }
 
     [Fact]

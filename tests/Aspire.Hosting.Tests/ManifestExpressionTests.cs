@@ -7,6 +7,7 @@ using Aspire.Hosting.Azure;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
@@ -281,11 +282,10 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UriFormattingExpandsOnlySelectedBrowserAndConditionalAliases()
+    public async Task UriFormattingExpandsOnlySelectedConditionalAliases()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var host = builder.AddParameter("public-host");
-        var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
         var conditionCalls = 0;
         var condition = new ParameterResource("selected", _ =>
         {
@@ -303,15 +303,128 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
             bool.TrueString, ReferenceExpression.Empty, ReferenceExpression.Empty);
         var conditional = ReferenceExpression.CreateConditional(condition,
             bool.TrueString, ReferenceExpression.Create($"https://{host}/{custom}"), inactive);
-        var browser = frontend.GetBrowserOrigin("http").WithPublishExpression(conditional);
-        builder.AddContainer("backend", "image").WithEnvironment("ENCODED", ReferenceExpression.Create($"{browser:uri}"));
+        var wrapper = new TestManifestValue(conditional.ValueExpression, (_, _) =>
+            throw new InvalidOperationException("The selected expression must remain symbolic."), conditional);
+        builder.AddContainer("backend", "image").WithEnvironment("ENCODED", ReferenceExpression.Create($"{wrapper:uri}"));
         using var app = builder.Build();
 
         var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
 
         Assert.Equal(1, customCalls);
         Assert.Equal(1, conditionCalls);
-        Assert.False(BrowserUrlSnapshotAnnotation.GetOrCreate(frontend.Resource).Value.IsValueSet);
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
+    }
+
+    [Theory]
+    [InlineData(EndpointProperty.BrowserOrigin)]
+    [InlineData(EndpointProperty.BrowserOrigins)]
+    [InlineData(EndpointProperty.BrowserOriginsJson)]
+    public async Task EndpointOriginPropertiesBecomeRequiredInputs(EndpointProperty property)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
+        var endpoint = frontend.GetEndpoint("http");
+        var origin = endpoint.Property(property);
+        var wrapped = new TestManifestValue(origin.ValueExpression, (_, _) =>
+            throw new InvalidOperationException("A manifest input must not read runtime values."), origin);
+        var selected = ReferenceExpression.CreateConditional(endpoint.Property(EndpointProperty.TlsEnabled), bool.FalseString,
+            ReferenceExpression.Create($"{frontend.GetEndpoint("HTTP").Property(property)}"),
+            ReferenceExpression.Create($"unused"));
+        builder.AddContainer("backend", "image")
+            .WithEnvironment("DIRECT", origin)
+            .WithEnvironment("COMPOSITE", ReferenceExpression.Create($"prefix/{origin}/suffix"))
+            .WithEnvironment("WRAPPED", wrapped)
+            .WithEnvironment("SELECTED", selected)
+            .WithEnvironment("ENCODED", ReferenceExpression.Create($"{origin:uri}"))
+            .WithEnvironment("ENDPOINT", endpoint)
+            .WithEnvironment("HOST", endpoint.Property(EndpointProperty.Host));
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>())
+            .DefaultTimeout();
+
+        Assert.False(endpoint.EndpointAnnotation.BrowserUrlsSnapshot.IsValueSet);
+        Assert.Collection(manifest["resources"]!.AsObject().Where(resource => resource.Value!["type"]!.GetValue<string>() == "parameter.v0"),
+            input => Assert.Equal($"frontend-http-{property}", input.Key));
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json").UseParameters(property);
+    }
+
+    [Fact]
+    public async Task EndpointOriginInputsAreLoweredInResourceManifestCallbacks()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
+        var origin = frontend.GetEndpoint("http").BrowserOrigins.First;
+        var module = builder.AddResource(new AzureBicepResource("module", templateString: "param origin string\nparam redirect string"));
+        module.Resource.Parameters["origin"] = origin;
+        module.Resource.Parameters["redirect"] = () => ReferenceExpression.Create($"{origin}/signin-oidc");
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>(), workspace.Path)
+            .DefaultTimeout();
+
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
+    }
+
+    [Fact]
+    public async Task EndpointOriginInputsAvoidExistingResourceNames()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddParameter("frontend-http-BrowserOrigin");
+        var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
+        builder.AddContainer("backend", "image")
+            .WithEnvironment("ORIGIN", frontend.GetEndpoint("http").BrowserOrigins.First);
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>())
+            .DefaultTimeout();
+
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UnselectedEndpointOriginDoesNotRequireDeploymentInput(bool originInTrueBranch)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
+        var origin = ReferenceExpression.Create($"{frontend.GetEndpoint("http").Property(EndpointProperty.BrowserOrigin)}");
+        var deployed = ReferenceExpression.Create($"https://deployed.example");
+        var conditional = ReferenceExpression.CreateConditional(
+            frontend.GetEndpoint("http").Property(EndpointProperty.TlsEnabled),
+            originInTrueBranch ? bool.TrueString : bool.FalseString,
+            originInTrueBranch ? origin : deployed,
+            originInTrueBranch ? deployed : origin);
+        builder.AddContainer("backend", "image").WithEnvironment("ORIGIN", conditional);
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
+
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json")
+            .UseParameters(originInTrueBranch);
+        Assert.False(frontend.GetEndpoint("http").EndpointAnnotation.BrowserUrlsSnapshot.IsValueSet);
+    }
+
+    [Fact]
+    public async Task ConditionalDoesNotEvaluateUnselectedNestedCondition()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
+        var unselectedCondition = new ParameterResource("unselected-condition", _ =>
+            throw new InvalidOperationException("An unselected condition must not be evaluated."));
+        var selectedValue = new ParameterResource("selected-value", _ => "selected");
+        var nested = ReferenceExpression.CreateConditional(unselectedCondition, bool.TrueString,
+            ReferenceExpression.Create($"nested-true"), ReferenceExpression.Create($"nested-false"));
+        var conditional = ReferenceExpression.CreateConditional(
+            frontend.GetEndpoint("http").Property(EndpointProperty.TlsEnabled), bool.TrueString,
+            nested, ReferenceExpression.Create($"{selectedValue}"));
+        builder.AddContainer("backend", "image").WithEnvironment("RESULT", conditional);
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
+
         await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
     }
 
@@ -352,7 +465,8 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
             throw new InvalidOperationException("An inactive branch must not be resolved."));
         var conditional = ReferenceExpression.CreateConditional(frontend.GetEndpoint("http").Property(EndpointProperty.TlsEnabled),
             bool.FalseString, inner, ReferenceExpression.Create($"{inactive}"));
-        var browser = frontend.GetBrowserOrigin("http").WithPublishExpression(conditional);
+        var browser = new TestManifestValue(conditional.ValueExpression, (_, _) =>
+            throw new InvalidOperationException("The selected expression must remain symbolic."), conditional);
         builder.AddContainer("backend", "image").WithEnvironment("ENCODED", ReferenceExpression.Create($"{browser:uri}"));
         using var app = builder.Build();
 
@@ -373,8 +487,9 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
             return ValueTask.FromResult<string?>("one two/%");
         });
         var frontend = builder.AddContainer("frontend", "image").WithHttpEndpoint(targetPort: 8080);
-        var browser = frontend.GetBrowserOrigin("http")
-            .WithPublishExpression(ReferenceExpression.Create($"https://example/?q={concrete:uri}"));
+        var inner = ReferenceExpression.Create($"https://example/?q={concrete:uri}");
+        var browser = new TestManifestValue(inner.ValueExpression, (_, _) =>
+            throw new InvalidOperationException("The composed expression must remain symbolic."), inner);
         builder.AddContainer("backend", "image").WithEnvironment("ENCODED", ReferenceExpression.Create($"{browser:uri}"));
         using var app = builder.Build();
 

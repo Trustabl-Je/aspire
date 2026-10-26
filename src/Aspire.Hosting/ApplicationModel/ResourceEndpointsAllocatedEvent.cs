@@ -12,12 +12,13 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Resources that customize their URLs via a <see cref="ResourceUrlsCallbackAnnotation"/> have their callbacks
 /// invoked before event handlers run. Browser URL references contain the finalized values at that point.
 /// Endpoint and URL configuration must be registered before this event is published.
+/// Browser-facing resource allocators should complete allocation through
+/// <see cref="DistributedApplicationEventingExtensions.PublishResourceEndpointsAllocatedAsync(IDistributedApplicationEventing, ResourceEndpointsAllocatedEvent, CancellationToken)"/>
+/// so URL customization completes before the notification is dispatched.
 /// </remarks>
 [AspireExport(ExposeProperties = true)]
 public class ResourceEndpointsAllocatedEvent(IResource resource, IServiceProvider services) : IDistributedApplicationResourceEvent
 {
-    internal bool UrlsPrepared { get; set; }
-
     /// <inheritdoc />
     public IResource Resource { get; } = resource;
 

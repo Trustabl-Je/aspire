@@ -11,8 +11,6 @@ param env_outputs_azure_container_registry_managed_identity_id string
 
 param backend_containerimage string
 
-param public_host_value string
-
 resource backend 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'backend'
   location: location
@@ -57,11 +55,19 @@ resource backend 'Microsoft.App/containerApps@2025-10-02-preview' = {
             }
             {
               name: 'ORIGIN'
-              value: 'https://${public_host_value}'
+              value: 'https://frontend.${env_outputs_azure_container_apps_environment_default_domain}'
+            }
+            {
+              name: 'ORIGINS'
+              value: 'https://frontend.${env_outputs_azure_container_apps_environment_default_domain}'
+            }
+            {
+              name: 'ORIGINS_JSON'
+              value: '["https://frontend.${env_outputs_azure_container_apps_environment_default_domain}"]'
             }
             {
               name: 'CONFIG'
-              value: 'origin=https://${public_host_value}'
+              value: 'origin=${'https://frontend.${env_outputs_azure_container_apps_environment_default_domain}'}'
             }
           ]
         }

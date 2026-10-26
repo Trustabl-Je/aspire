@@ -9,6 +9,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.Configuration;
@@ -73,7 +74,6 @@ internal sealed class ApplicationOrchestrator
         dcpExecutorEvents.Subscribe<OnConnectionStringAvailableContext>(OnConnectionStringAvailable);
         dcpExecutorEvents.Subscribe<OnResourceFailedToStartContext>(OnResourceFailedToStart);
 
-        _eventing.Subscribe<ResourceEndpointsAllocatedEvent>(OnResourceEndpointsAllocated).IsPreparation = true;
         _eventing.Subscribe<ConnectionStringAvailableEvent>(PublishConnectionStringValue);
         // Implement WaitFor functionality using BeforeResourceStartedEvent.
         _eventing.Subscribe<BeforeResourceStartedEvent>(WaitForInBeforeResourceStartedEvent);
@@ -198,11 +198,25 @@ internal sealed class ApplicationOrchestrator
         }
     }
 
-    private async Task OnEndpointsAllocated(OnEndpointsAllocatedContext context)
+    private Task OnEndpointsAllocated(OnEndpointsAllocatedContext context) =>
+        PublishEndpointsAllocatedAsync(context.Events, _eventing, EventDispatchBehavior.BlockingSequential, context.CancellationToken);
+
+    internal async Task PublishEndpointsAllocatedAsync(
+        IReadOnlyList<ResourceEndpointsAllocatedEvent> events,
+        IDistributedApplicationEventing eventing,
+        EventDispatchBehavior dispatchBehavior,
+        CancellationToken cancellationToken)
     {
-        foreach (var endpointEvent in context.Events)
+        // Initial DCP allocations form a batch: finalize every resource before observers can
+        // resolve another resource's browser origins from an allocation notification.
+        foreach (var endpointEvent in events)
         {
-            await OnResourceEndpointsAllocated(endpointEvent, context.CancellationToken).ConfigureAwait(false);
+            await PublishResourceEndpointUrls(endpointEvent.Resource, cancellationToken).ConfigureAwait(false);
+        }
+
+        foreach (var endpointEvent in events)
+        {
+            await eventing.PublishAsync(endpointEvent, dispatchBehavior, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -302,10 +316,8 @@ internal sealed class ApplicationOrchestrator
     private async Task ProcessResourceUrlCallbacks(IResource resource, CancellationToken cancellationToken)
     {
         var urls = new List<ResourceUrlAnnotation>();
-        var browserUrls = BrowserUrlSnapshotAnnotation.GetOrCreate(resource);
+        var resourceEndpoints = resource.Annotations.OfType<EndpointAnnotation>().ToArray();
         EndpointAnnotation? primaryLaunchProfileEndpoint = null;
-        var wasProcessingUrls = BrowserUrlSnapshotAnnotation.IsProcessingUrls.Value;
-        BrowserUrlSnapshotAnnotation.IsProcessingUrls.Value = true;
 
         try
         {
@@ -551,7 +563,36 @@ internal sealed class ApplicationOrchestrator
                 }
             }
 
-            browserUrls.Capture(resource, urls);
+            if (_executionContext.IsRunMode && _serviceProvider.GetService<CodespacesUrlRewriter>() is { } codespacesRewriter)
+            {
+                foreach (var url in urls)
+                {
+                    // Details-only endpoint links still participate in browser-origin collections.
+                    // Project them too, so those collections never retain Codespace-local addresses.
+                    if ((url.Endpoint is not null || !url.IsInternal) &&
+                        codespacesRewriter.TryRewriteResourceUrl(url.Url, out var rewrittenUrl))
+                    {
+                        url.Url = rewrittenUrl;
+                    }
+                }
+            }
+
+            var resourceComparer = new ResourceNameComparer();
+            var browserUrls = urls
+                .Where(url => url.Endpoint is { } endpoint && resourceComparer.Equals(endpoint.Resource, resource))
+                .Select(url => (Annotation: url, Uri: GetBrowserUrl(url)))
+                .Where(url => url.Uri.Scheme is "http" or "https")
+                .OrderBy(url => url.Annotation.DisplayLocation == UrlDisplayLocation.DetailsOnly)
+                .ThenByDescending(url => url.Annotation.DisplayOrder ?? 0)
+                .ThenByDescending(url => url.Uri.Scheme == Uri.UriSchemeHttps)
+                .ToArray();
+            foreach (var endpoint in resourceEndpoints)
+            {
+                endpoint.BrowserUrlsSnapshot.SetValue(browserUrls
+                    .Where(url => string.Equals(url.Annotation.Endpoint!.EndpointName, endpoint.Name, StringComparisons.EndpointAnnotationName))
+                    .Select(url => url.Annotation)
+                    .ToArray());
+            }
 
             // Add URLs
             var count = 0;
@@ -571,23 +612,23 @@ internal sealed class ApplicationOrchestrator
         }
         catch (Exception ex)
         {
-            browserUrls.Value.SetException(ex);
+            foreach (var endpoint in resourceEndpoints)
+            {
+                endpoint.BrowserUrlsSnapshot.SetException(ex);
+            }
 
             var resourceLogger = _loggerService.GetLogger(resource);
             resourceLogger.LogError(ex, "An error occurred while processing URLs for resource '{ResourceName}': {Message}", resource.Name, ex.Message);
         }
-        finally
-        {
-            BrowserUrlSnapshotAnnotation.IsProcessingUrls.Value = wasProcessingUrls;
-        }
-    }
 
-    private async Task OnResourceEndpointsAllocated(ResourceEndpointsAllocatedEvent @event, CancellationToken cancellationToken)
-    {
-        if (!@event.UrlsPrepared)
+        Uri GetBrowserUrl(ResourceUrlAnnotation url)
         {
-            await PublishResourceEndpointUrls(@event.Resource, cancellationToken).ConfigureAwait(false);
-            @event.UrlsPrepared = true;
+            if (!Uri.TryCreate(url.Url, UriKind.Absolute, out var uri))
+            {
+                throw new InvalidOperationException($"The browser URL '{url.Url}' for resource '{resource.Name}' must be absolute.");
+            }
+
+            return new UriBuilder(uri) { Host = uri.HostNameType == UriHostNameType.Dns ? uri.IdnHost : uri.Host }.Uri;
         }
     }
 

@@ -579,7 +579,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
                 }
 
                 // Publish the ResourceEndpointsAllocatedEvent for the resource
-                await e.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(custom, e.Services), EventDispatchBehavior.BlockingConcurrent, ct);
+                await e.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(custom, e.Services), EventDispatchBehavior.BlockingConcurrent, ct);
 
                 // Publish the BeforeResourceStartedEvent for the resource
                 await e.Eventing.PublishAsync(new BeforeResourceStartedEvent(custom, e.Services), EventDispatchBehavior.BlockingSequential, ct);

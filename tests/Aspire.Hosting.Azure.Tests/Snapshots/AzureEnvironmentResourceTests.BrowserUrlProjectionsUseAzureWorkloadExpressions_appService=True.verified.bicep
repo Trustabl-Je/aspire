@@ -11,8 +11,6 @@ param env_outputs_azure_container_registry_managed_identity_client_id string
 
 param backend_containerimage string
 
-param public_host_value string
-
 param env_outputs_azure_app_service_dashboard_uri string
 
 param env_outputs_azure_website_contributor_managed_identity_id string
@@ -60,11 +58,19 @@ resource webapp 'Microsoft.Web/sites@2025-03-01' = {
         }
         {
           name: 'ORIGIN'
-          value: 'https://${public_host_value}'
+          value: 'https://${take('${toLower('frontend')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+        }
+        {
+          name: 'ORIGINS'
+          value: 'https://${take('${toLower('frontend')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+        }
+        {
+          name: 'ORIGINS_JSON'
+          value: '["https://${take('${toLower('frontend')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net"]'
         }
         {
           name: 'CONFIG'
-          value: 'origin=https://${public_host_value}'
+          value: 'origin=${'https://${take('${toLower('frontend')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'}'
         }
         {
           name: 'ASPIRE_ENVIRONMENT_NAME'

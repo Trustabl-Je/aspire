@@ -2202,7 +2202,7 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.Resource.GetEndpoint(name, contextNetworkId);
+        return new EndpointReference(builder.Resource, name, contextNetworkId);
     }
 
     /// <summary>
@@ -2219,7 +2219,7 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.Resource.GetEndpoint(name);
+        return new EndpointReference(builder.Resource, name);
     }
 
     /// <summary>
@@ -2238,52 +2238,6 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// References the resource's preferred browser origin without changing endpoint service discovery.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <returns>A deferred scalar origin reference with explicit URL and origin collections.</returns>
-    /// <remarks>Direct use resolves to the preferred origin. Use <see cref="BrowserOriginReference.Origins"/> for all origins.</remarks>
-    /// <example>
-    /// <code>
-    /// backend.WithEnvironment("ALLOWED_ORIGINS", frontend.GetBrowserOrigin().Origins.AsJson());
-    /// </code>
-    /// </example>
-    [AspireExport]
-    public static BrowserOriginReference GetBrowserOrigin<T>(this IResourceBuilder<T> builder) where T : IResourceWithEndpoints
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        return new(builder.Resource);
-    }
-
-    /// <summary>
-    /// References the preferred browser origin associated with one endpoint.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="endpointName">The endpoint to filter.</param>
-    /// <returns>A deferred preferred-origin reference, including the endpoint's other browser addresses.</returns>
-    [AspireExport("getBrowserOriginForEndpoint", MethodName = "getBrowserOriginForEndpoint")]
-    public static BrowserOriginReference GetBrowserOrigin<T>(this IResourceBuilder<T> builder, string endpointName) where T : IResourceWithEndpoints
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(endpointName);
-        return new(builder.Resource, endpointName);
-    }
-
-    /// <summary>
-    /// References the preferred browser origin for an endpoint, independently of its network context.
-    /// </summary>
-    /// <param name="endpoint">The underlying endpoint reference.</param>
-    /// <returns>A deferred preferred-origin reference with explicit collection projections.</returns>
-    [AspireExport("EndpointReference.getBrowserOrigin", MethodName = "getBrowserOrigin")]
-    public static BrowserOriginReference GetBrowserOrigin(this EndpointReference endpoint)
-    {
-        ArgumentNullException.ThrowIfNull(endpoint);
-        return new(endpoint.Resource, endpoint.EndpointName);
-    }
-
-    /// <summary>
     /// Registers a callback to customize the URLs displayed for the resource.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
@@ -2299,7 +2253,7 @@ public static class ResourceBuilderExtensions
     /// Note that any endpoints on the resource will automatically get a corresponding URL added for them.
     /// </para>
     /// <para>
-    /// Final URLs associated with the resource's own endpoints are exposed through <see cref="BrowserOriginReference"/>.
+    /// Final origins associated with the resource's own endpoints are exposed through <see cref="EndpointReference.BrowserOrigins"/>.
     /// Preferred browser values follow display ordering; origin collections deduplicate scheme, host, and port.
     /// Browser references are finalized after these callbacks, so callbacks must not await unfinished browser references.
     /// </para>
@@ -2363,7 +2317,7 @@ public static class ResourceBuilderExtensions
     /// Note that any endpoints on the resource will automatically get a corresponding URL added for them.
     /// </para>
     /// <para>
-    /// Final URLs associated with the resource's own endpoints are exposed through <see cref="BrowserOriginReference"/>.
+    /// Final origins associated with the resource's own endpoints are exposed through <see cref="EndpointReference.BrowserOrigins"/>.
     /// Preferred browser values follow display ordering; origin collections deduplicate scheme, host, and port.
     /// Browser references are finalized after these callbacks, so callbacks must not await unfinished browser references.
     /// </para>
@@ -2529,8 +2483,8 @@ public static class ResourceBuilderExtensions
     /// This allows you to modify the URL or its display text.
     /// </para>
     /// <para>
-    /// The finalized URL is also available through <see cref="BrowserOriginReference"/>, including full URL and
-    /// origin-only projections. Localhost and container network references are unchanged.
+    /// The finalized origin is available through <see cref="EndpointReference.BrowserOrigins"/>.
+    /// Localhost and container network references are unchanged.
     /// </para>
     /// <para>
     /// If the URL returned by <paramref name="callback"/> is relative, it will be combined with the endpoint URL to create an absolute URL.

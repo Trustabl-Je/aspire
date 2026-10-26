@@ -26,40 +26,46 @@ public class DistributedApplicationEventing : IDistributedApplicationEventing
     {
         if (_eventSubscriptionListLookup.TryGetValue(typeof(T), out var subscriptions))
         {
-            var eventSubscriptions = subscriptions.ToArray();
-            if (dispatchBehavior is EventDispatchBehavior.NonBlockingSequential or EventDispatchBehavior.NonBlockingConcurrent)
+            if (dispatchBehavior == EventDispatchBehavior.BlockingConcurrent || dispatchBehavior == EventDispatchBehavior.NonBlockingConcurrent)
             {
-                // Preparation is part of dispatch: URL callbacks must not block a non-blocking publisher.
-                _ = Task.Run(DispatchAsync, default);
-                return;
-            }
-
-            await DispatchAsync().ConfigureAwait(false);
-
-            async Task DispatchAsync()
-            {
-                foreach (var subscription in eventSubscriptions)
+                var pendingSubscriptionCallbacks = new List<Task>(subscriptions.Count);
+                foreach (var subscription in subscriptions.ToArray())
                 {
-                    if (subscription.IsPreparation)
-                    {
-                        await InvokeSubscriptionCallbackAsync(subscription, @event, EventDispatchBehavior.BlockingSequential, cancellationToken).ConfigureAwait(false);
-                    }
+                    var pendingSubscriptionCallback = InvokeSubscriptionCallbackAsync(subscription, @event, dispatchBehavior, cancellationToken);
+                    pendingSubscriptionCallbacks.Add(pendingSubscriptionCallback);
                 }
 
-                var observers = eventSubscriptions.Where(s => !s.IsPreparation).ToArray();
-                if (dispatchBehavior is EventDispatchBehavior.BlockingConcurrent or EventDispatchBehavior.NonBlockingConcurrent)
+                if (dispatchBehavior == EventDispatchBehavior.NonBlockingConcurrent)
                 {
-                    var pendingSubscriptionCallbacks = new List<Task>(observers.Length);
-                    foreach (var subscription in observers)
+                    // Non-blocking concurrent.
+                    _ = Task.Run(async () =>
                     {
-                        pendingSubscriptionCallbacks.Add(InvokeSubscriptionCallbackAsync(subscription, @event, dispatchBehavior, cancellationToken));
-                    }
-
-                    await Task.WhenAll(pendingSubscriptionCallbacks).ConfigureAwait(false);
+                        await Task.WhenAll(pendingSubscriptionCallbacks).ConfigureAwait(false);
+                    }, default);
                 }
                 else
                 {
-                    foreach (var subscription in observers)
+                    // Blocking concurrent.
+                    await Task.WhenAll(pendingSubscriptionCallbacks).ConfigureAwait(false);
+                }
+            }
+            else
+            {
+                if (dispatchBehavior == EventDispatchBehavior.NonBlockingSequential)
+                {
+                    // Non-blocking sequential.
+                    _ = Task.Run(async () =>
+                    {
+                        foreach (var subscription in subscriptions.ToArray())
+                        {
+                            await InvokeSubscriptionCallbackAsync(subscription, @event, dispatchBehavior, cancellationToken).ConfigureAwait(false);
+                        }
+                    }, default);
+                }
+                else
+                {
+                    // Blocking sequential.
+                    foreach (var subscription in subscriptions.ToArray())
                     {
                         await InvokeSubscriptionCallbackAsync(subscription, @event, dispatchBehavior, cancellationToken).ConfigureAwait(false);
                     }

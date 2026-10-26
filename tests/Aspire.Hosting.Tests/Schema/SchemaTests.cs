@@ -63,6 +63,9 @@ public class SchemaTests
                             throw new InvalidOperationException("A symbolic wrapper must not be evaluated."), host.Resource);
                         builder.AddContainer("backend", "image")
                             .WithEnvironment("URL", wrapper)
+                            .WithEnvironment("ORIGIN", frontend.GetEndpoint("http").BrowserOrigins.First)
+                            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())
+                            .WithEnvironment("ORIGINS_JSON", frontend.GetEndpoint("http").BrowserOrigins.AsJson())
                             .WithEnvironment("ENCODED", ReferenceExpression.Create($"{formatted:uri}"));
                     }
                 },

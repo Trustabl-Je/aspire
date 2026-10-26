@@ -60,6 +60,8 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
     private readonly Dictionary<IValueProvider, string> _concreteManifestReferences = new(ReferenceEqualityComparer.Instance);
 
+    private readonly Dictionary<string, string> _endpointPropertyInputs = new(StringComparer.OrdinalIgnoreCase);
+
     private readonly Dictionary<string, string> _resolvedManifestValues = new(StringComparer.Ordinal);
 
     private readonly Dictionary<string, string> _loweredManifestValues = new(StringComparer.Ordinal);
@@ -107,6 +109,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         _formattedReferences.Clear();
         _formattedValues.Clear();
         _concreteManifestReferences.Clear();
+        _endpointPropertyInputs.Clear();
         _resolvedManifestValues.Clear();
         _loweredManifestValues.Clear();
         _parameterNames.Clear();
@@ -132,6 +135,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         await WriteManifestValuesAsync().ConfigureAwait(false);
 
+        WriteEndpointPropertyInputs();
         WriteRemainingFormattedParameters();
         WriteFormattedExpressions();
 
@@ -146,6 +150,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         _formattedReferences.Clear();
         _formattedValues.Clear();
         _concreteManifestReferences.Clear();
+        _endpointPropertyInputs.Clear();
         _resolvedManifestValues.Clear();
         _loweredManifestValues.Clear();
         _parameterNames.Clear();
@@ -767,6 +772,23 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         }
     }
 
+    /// <summary>
+    /// Gets the manifest representation of a value, registering any generated values or required inputs.
+    /// </summary>
+    /// <param name="value">The symbolic value to represent in the manifest.</param>
+    /// <returns>The expression to write into the manifest.</returns>
+    /// <remarks>
+    /// Manifest callbacks should use this method rather than writing
+    /// <see cref="IManifestExpressionProvider.ValueExpression"/> directly when a value may require lowering.
+    /// Call <see cref="TryAddDependentResources"/> to include its referenced resources.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is <see langword="null"/>.</exception>
+    public string GetManifestExpression(IManifestExpressionProvider value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return GetManifestExpression(value, value.ValueExpression);
+    }
+
     private string GetManifestExpression(object? source, string expression)
     {
         if (source is not IManifestExpressionProvider)
@@ -783,7 +805,9 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         {
             return source switch
             {
-                BrowserOriginReference browserOrigin => RegisterManifestValue(browserOrigin.ManifestResourceName, browserOrigin, resolveValue: false),
+                EndpointReferenceExpression endpoint when endpoint.Property is
+                    EndpointProperty.BrowserOrigin or EndpointProperty.BrowserOrigins or EndpointProperty.BrowserOriginsJson =>
+                    RegisterEndpointPropertyInput(endpoint),
                 ReferenceExpression referenceExpression => GetManifestExpression(referenceExpression),
                 _ => LowerManifestReferences(source, expression)
             };
@@ -903,7 +927,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 }
 
                 // Conditional dependencies include both branches; only a selected alias may expand them.
-                if (reference is IResource or BrowserOriginReference or ReferenceExpression { IsConditional: true })
+                if (reference is IResource or ReferenceExpression { IsConditional: true })
                 {
                     continue;
                 }
@@ -1208,9 +1232,6 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                         ? conditional.WhenTrue!
                         : conditional.WhenFalse!;
                     break;
-                case BrowserOriginReference browserOrigin:
-                    expression = browserOrigin.ToReferenceExpression(ExecutionContext);
-                    break;
                 default:
                     throw new InvalidOperationException($"Unsupported manifest value '{name}'.");
             }
@@ -1260,6 +1281,40 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
     private static string EscapeManifestLiteral(string value) =>
         value.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal);
+
+    private string RegisterEndpointPropertyInput(EndpointReferenceExpression endpoint)
+    {
+        if (!_endpointPropertyInputs.TryGetValue(endpoint.ValueExpression, out var name))
+        {
+            // azd understands ordinary binding tokens, but not browser-origin properties.
+            // Keep those properties symbolic as required inputs; no runtime allocation is read.
+            var baseName = ResourceNameHelpers.TruncateWithHash(
+                $"{endpoint.Endpoint.Resource.Name}-{endpoint.Endpoint.EndpointName}-{endpoint.Property}",
+                ModelName.DefaultMaxLength);
+            name = GetAvailableManifestResourceName(baseName);
+            _manifestResourceNames.Add(name);
+            _parameterNames.Add(name);
+            _endpointPropertyInputs.Add(endpoint.ValueExpression, name);
+        }
+
+        return $"{{{name}.value}}";
+    }
+
+    private void WriteEndpointPropertyInputs()
+    {
+        foreach (var name in _endpointPropertyInputs.Values)
+        {
+            Writer.WriteStartObject(name);
+            Writer.WriteString("type", "parameter.v0");
+            Writer.WriteString("value", $"{{{name}.inputs.value}}");
+            Writer.WriteStartObject("inputs");
+            Writer.WriteStartObject("value");
+            Writer.WriteString("type", "string");
+            Writer.WriteEndObject();
+            Writer.WriteEndObject();
+            Writer.WriteEndObject();
+        }
+    }
 
     private string? GetFormattedResourceNameForProvider(object provider, string format)
     {

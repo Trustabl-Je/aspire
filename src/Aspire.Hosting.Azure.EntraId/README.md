@@ -87,25 +87,21 @@ compute environment. The callback path can't be discovered, so it must match the
 entraWeb.WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
 ```
 
-Run-mode origins come from the shared `GetBrowserOrigin()` reference after all `WithUrlForEndpoint` and `WithUrls` callbacks finish.
+Run-mode origins come from the endpoint's `BrowserOrigins` after all `WithUrlForEndpoint` and `WithUrls` callbacks finish.
 This includes friendly `*.dev.localhost` names and custom origins added after `WithRedirectUris`. Preferred origins follow display
 ordering, and navigation paths, queries, and fragments are excluded before appending the callback path. Removing all browser URLs
 for the endpoint reports a missing origin rather than falling back to its physical address.
 
-For custom composition, pass ordinary reference expressions:
+To select the browser origin explicitly, pass the scalar reference and callback paths:
 
 ```csharp
-var origin = web.GetBrowserOrigin("https");
-entraWeb.WithRedirectUris(
-    ReferenceExpression.Create($"{origin}/signin-oidc"),
-    ReferenceExpression.Create($"{origin}/signout-callback-oidc"));
+var origin = web.GetEndpoint("https").BrowserOrigins.First;
+entraWeb.WithRedirectUris(origin, "/signin-oidc", "/signout-callback-oidc");
 ```
 
-Expressions preserve their deferred value providers. For publish/deploy, an explicit browser-origin expression needs a
-publisher-supported deployment value (for example,
-`origin.WithPublishExpression(...).ToReferenceExpression(builder.ExecutionContext)`). The endpoint convenience overload
-continues to construct its HTTPS hostname expression from the owning compute environment during infrastructure generation,
+Both overloads use the same publish/deploy behavior: an HTTPS hostname expression from the owning compute environment during infrastructure generation,
 preserving deployment outputs and allowing compute-environment configuration after `WithRedirectUris`.
+For a different public origin, supply the callback URLs explicitly or through parameters.
 
 When only the host name varies per environment (for example, a custom domain supplied at deployment time), pass a parameter for the host
 and the fixed callback paths. Each URI is `https://{host}{path}`:

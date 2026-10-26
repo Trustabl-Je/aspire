@@ -881,44 +881,54 @@ public static class EntraIdResourceExtensions
     }
 
     /// <summary>
-    /// Adds deferred redirect URI expressions to a registration created by Aspire.
+    /// Adds redirect URIs for a browser origin to a registration created by Aspire.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="redirectUri">The first redirect URI expression.</param>
-    /// <param name="additionalRedirectUris">Additional redirect URI expressions.</param>
+    /// <param name="browserOrigin">An endpoint's <see cref="EndpointProperty.BrowserOrigin"/> expression that serves the callbacks.</param>
+    /// <param name="callbackPaths">The callback paths on that origin, such as <c>/signin-oidc</c>.</param>
     /// <returns>The resource builder for chaining.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when an argument or an additional expression is null.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when an argument is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when the expression is not a browser origin, no path is provided, or a path doesn't start with <c>/</c>.</exception>
     /// <remarks>
-    /// Expressions retain their parameters, outputs, and browser-origin references until resolution.
-    /// Browser-origin references use finalized URLs in run mode and require a publisher-supported expression
-    /// when publishing. Existing registrations are not modified.
+    /// This uses the same resolution as the endpoint overload: the preferred finalized browser origin in run mode,
+    /// or an HTTPS URL using the owning compute environment's host expression when publishing.
+    /// Callback paths must match the consuming application's configuration.
+    /// Existing registrations are not modified.
     /// </remarks>
     /// <example>
     /// <code>
-    /// var origin = web.GetBrowserOrigin("https");
-    /// entraWeb.WithRedirectUris(ReferenceExpression.Create($"{origin}/signin-oidc"));
+    /// var origin = web.GetEndpoint("https").BrowserOrigins.First;
+    /// entraWeb.WithRedirectUris(origin, "/signin-oidc", "/signout-callback-oidc");
     /// </code>
     /// </example>
     public static IResourceBuilder<EntraIdApplicationResource> WithRedirectUris(
         this IResourceBuilder<EntraIdApplicationResource> builder,
-        ReferenceExpression redirectUri,
-        params ReferenceExpression[] additionalRedirectUris)
+        EndpointReferenceExpression browserOrigin,
+        params string[] callbackPaths)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(redirectUri);
-        ArgumentNullException.ThrowIfNull(additionalRedirectUris);
-        foreach (var expression in additionalRedirectUris)
+        ArgumentNullException.ThrowIfNull(browserOrigin);
+        ArgumentNullException.ThrowIfNull(callbackPaths);
+        if (browserOrigin.Property != EndpointProperty.BrowserOrigin)
         {
-            ArgumentNullException.ThrowIfNull(expression, nameof(additionalRedirectUris));
+            throw new ArgumentException("The endpoint expression must select the browser origin.", nameof(browserOrigin));
         }
 
-        builder.Resource.AddRedirectUri(redirectUri);
-        foreach (var expression in additionalRedirectUris)
+        if (callbackPaths.Length == 0)
         {
-            builder.Resource.AddRedirectUri(expression);
+            throw new ArgumentException("At least one callback path is required.", nameof(callbackPaths));
         }
 
-        return builder;
+        foreach (var path in callbackPaths)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(path, nameof(callbackPaths));
+            if (!path.StartsWith('/'))
+            {
+                throw new ArgumentException($"The callback path '{path}' must start with '/'.", nameof(callbackPaths));
+            }
+        }
+
+        return builder.WithRedirectUris(browserOrigin.Endpoint, callbackPaths);
     }
 
     /// <summary>
@@ -989,7 +999,7 @@ public static class EntraIdResourceExtensions
         {
             if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
             {
-                return ReferenceExpression.Create($"{endpoint.GetBrowserOrigin()}{path}");
+                return ReferenceExpression.Create($"{endpoint.BrowserOrigins.First}{path}");
             }
 
             // Delay environment lookup until infrastructure generation, so compute-environment

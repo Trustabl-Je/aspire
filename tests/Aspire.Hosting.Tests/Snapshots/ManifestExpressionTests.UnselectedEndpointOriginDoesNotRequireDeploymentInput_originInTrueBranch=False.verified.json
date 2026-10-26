@@ -16,12 +16,12 @@
       "type": "container.v0",
       "image": "image:latest",
       "env": {
-        "RESULT": "{cond-browser-frontend-preferred-origin-ac29857540c35938-connectionstring-1b1884ad.connectionString}"
+        "ORIGIN": "{cond-frontend-bindings-http-tlsenabled-8f90c942.connectionString}"
       }
     },
-    "cond-browser-frontend-preferred-origin-ac29857540c35938-connectionstring-1b1884ad": {
+    "cond-frontend-bindings-http-tlsenabled-8f90c942": {
       "type": "value.v0",
-      "connectionString": "selected"
+      "connectionString": "https://deployed.example"
     }
   }
 }

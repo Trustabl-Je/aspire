@@ -20,8 +20,10 @@
   backend:
     image: "nginx:alpine"
     environment:
-      ORIGIN: "https://${PUBLIC_HOST}"
-      CONFIG: "origin=https://${PUBLIC_HOST}"
+      ORIGIN: "${FRONTEND_HTTP_BROWSERORIGIN}"
+      ORIGINS: "${FRONTEND_HTTP_BROWSERORIGINS}"
+      ORIGINS_JSON: "${FRONTEND_HTTP_BROWSERORIGINSJSON}"
+      CONFIG: "origin=${FRONTEND_HTTP_BROWSERORIGIN}"
     networks:
       - "aspire"
 networks:

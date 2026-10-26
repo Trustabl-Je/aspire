@@ -16,10 +16,10 @@
       "type": "container.v0",
       "image": "image:latest",
       "env": {
-        "ORIGIN": "{cond-frontend-bindings-http-tlsenabled-c5d126f3.connectionString}"
+        "ORIGIN": "{cond-frontend-bindings-http-tlsenabled-40dbd724.connectionString}"
       }
     },
-    "cond-frontend-bindings-http-tlsenabled-c5d126f3": {
+    "cond-frontend-bindings-http-tlsenabled-40dbd724": {
       "type": "value.v0",
       "connectionString": "https://deployed.example"
     }

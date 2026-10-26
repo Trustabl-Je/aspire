@@ -16,7 +16,7 @@
       "type": "container.v0",
       "image": "image:latest",
       "env": {
-        "ENCODED": "{value-408c1afb0b6d70eb-uri-encoded.connectionString}"
+        "ENCODED": "{value-99e6deef0891b691-uri-encoded.connectionString}"
       }
     },
     "query": {
@@ -42,15 +42,11 @@
         }
       }
     },
-    "browser-frontend-preferred-origin-9da4dbe4bd7249d4": {
-      "type": "value.v0",
-      "connectionString": "{cond-frontend-bindings-http-tlsenabled-3222dddb.connectionString}"
-    },
     "cond-frontend-bindings-http-tlsenabled-3222dddb": {
       "type": "value.v0",
       "connectionString": "https://example/?q={query-uri-encoded.value}"
     },
-    "value-408c1afb0b6d70eb-uri-encoded": {
+    "value-99e6deef0891b691-uri-encoded": {
       "type": "value.v0",
       "connectionString": "https%3A%2F%2Fexample%2F%3Fq%3D{value-3f8a3dc00d06603c-uri-encoded.value}"
     },

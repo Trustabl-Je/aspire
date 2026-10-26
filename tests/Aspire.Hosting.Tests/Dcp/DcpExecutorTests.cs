@@ -4507,8 +4507,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         });
 
         var kubernetesService = new TestKubernetesService();
+        builder.Services.AddSingleton<Hosting.Eventing.IDistributedApplicationEventing>(eventing);
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var orchestrator = app.Services.GetRequiredService<Hosting.Orchestrator.ApplicationOrchestrator>();
+        events.Subscribe<OnEndpointsAllocatedContext>(context => orchestrator.PublishEndpointsAllocatedAsync(
+            context.Events, eventing, Hosting.Eventing.EventDispatchBehavior.BlockingSequential, context.CancellationToken));
         var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events, distributedApplicationEventing: eventing);
         await appExecutor.RunApplicationAsync();
 
@@ -4723,8 +4727,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>(async (@event, ct) =>
         {
             Assert.Equal(2, callbackCount);
-            Assert.Equal("https://frontend.example", await frontend.GetBrowserOrigin("http").GetValueAsync(ct));
-            Assert.Equal("https://backend.example", await backend.GetBrowserOrigin("http").GetValueAsync(ct));
+            Assert.Equal("https://frontend.example", await frontend.GetEndpoint("http").BrowserOrigins.First.GetValueAsync(ct));
+            Assert.Equal("https://backend.example", await backend.GetEndpoint("http").BrowserOrigins.First.GetValueAsync(ct));
             observedResources.Add(@event.Resource.Name);
         });
 
@@ -4763,9 +4767,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         });
 
         var kubernetesService = new TestKubernetesService();
+        var events = new DcpExecutorEvents();
+        builder.Services.AddSingleton(events);
+        builder.Services.AddSingleton<Hosting.Eventing.IDistributedApplicationEventing>(eventing);
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, distributedApplicationEventing: eventing);
+        _ = app.Services.GetRequiredService<Hosting.Orchestrator.ApplicationOrchestrator>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events, distributedApplicationEventing: eventing);
 
         var runTask = appExecutor.RunApplicationAsync();
         await subscriberEntered.Task.DefaultTimeout();
