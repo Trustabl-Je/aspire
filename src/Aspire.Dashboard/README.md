@@ -215,6 +215,11 @@ Telemetry limits have different scopes depending on the telemetry type:
 | `Dashboard:UI:DisableResourceGraph`<br/>Default: `false` | Disables the resource graph UI. |
 | `Dashboard:UI:DisableImport`<br/>Default: `false` | Disables the telemetry import UI. |
 | `Dashboard:UI:DisableAgentHelp`<br/>Default: `false` | Disables the **AI Agents** button in the dashboard header. When `false`, the button opens a dialog with instructions for using AI coding agents with the dashboard. |
+| `Dashboard:UI:ReadmeDirectory`<br/>Default: `null` | Starting directory for README discovery. The AppHost supplies its project directory automatically. The desktop dashboard opens the repository-root `README.md` in a right-hand panel, falling back to the nearest `README.md` between the AppHost and repository root. Both `.git` directories and worktree `.git` files are recognized. Without Git metadata, the nearest ancestor README is used. Standalone dashboards do not discover files unless this option is configured. Alias: `ASPIRE_DASHBOARD_README_DIRECTORY`. |
+| `Dashboard:UI:ReadmePath`<br/>Default: `null` | Overrides README discovery with a Markdown file, for example a tutorial. Relative paths are resolved against `ReadmeDirectory`, or the dashboard working directory when no directory is configured. Alias: `ASPIRE_DASHBOARD_README_PATH`. |
+| `Dashboard:UI:DisableReadme`<br/>Default: `false` | Disables the README panel. |
+
+The README panel is an initial educational-content spike. It can be closed and reopened with the book button in the desktop header, scrolls independently, and reloads its content on browser refresh. Documents are limited to 1 MiB. Raw HTML is disabled and links use the dashboard's safe Markdown renderer. Repository-relative links and local images are not served by this spike. The file must be accessible to the dashboard process; a containerized dashboard needs an explicit mounted path. README content is visible to anyone authorized to use the dashboard.
 
 For the maintained configuration reference, see [Aspire dashboard configuration](https://aspire.dev/dashboard/configuration/).
 

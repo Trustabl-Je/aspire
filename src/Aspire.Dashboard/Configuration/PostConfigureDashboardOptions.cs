@@ -26,6 +26,16 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
     {
         _logger.LogDebug($"PostConfigure {nameof(DashboardOptions)} with name '{name}'.");
 
+        if (_configuration[DashboardConfigNames.UIReadmeDirectoryName.EnvVarName] is { Length: > 0 } readmeDirectory)
+        {
+            options.UI.ReadmeDirectory = readmeDirectory;
+        }
+
+        if (_configuration[DashboardConfigNames.UIReadmePathName.EnvVarName] is { Length: > 0 } readmePath)
+        {
+            options.UI.ReadmePath = readmePath;
+        }
+
         if (_configuration[DashboardConfigNames.DashboardApplicationName.EnvVarName] is { Length: > 0 } applicationName)
         {
             options.ApplicationName = applicationName;

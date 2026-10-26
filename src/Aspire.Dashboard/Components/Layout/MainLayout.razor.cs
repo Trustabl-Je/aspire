@@ -6,6 +6,7 @@ using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -23,6 +24,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private bool _runSelectionChanged;
     private bool _isSwitchingRuns;
     private bool _hasResourceTerminals;
+    private string? _readmePath;
+    private string? _readmeMarkdown;
+    private bool _readmeLoadFailed;
+    private bool _isReadmeOpen = true;
+    private MarkdownProcessor? _readmeProcessor;
     // Fluent v5 has no API to notify the provider after mutating an existing toast's options. This value is
     // rendered as an additional provider attribute so changing it forces FluentToastProvider to read them again.
     private int _toastProviderUpdateVersion;
@@ -68,6 +74,9 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Resources.ControlsStrings> ControlsLoc { get; init; }
+
+    [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
     [Inject]
@@ -110,6 +119,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadReadmeAsync();
+
         if (RunStore.SupportsRunSelection)
         {
             var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
@@ -190,6 +201,30 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         catch (ObjectDisposedException ex) when (_isDisposing)
         {
             Logger.LogDebug(ex, "Dashboard layout initialization stopped because the layout was disposed.");
+        }
+    }
+
+    private async Task LoadReadmeAsync()
+    {
+        var ui = Options.CurrentValue.UI;
+        if (ui.DisableReadme)
+        {
+            return;
+        }
+
+        try
+        {
+            _readmePath = ReadmeFile.FindPath(ui.ReadmeDirectory, ui.ReadmePath);
+            if (_readmePath is not null)
+            {
+                _readmeMarkdown = await ReadmeFile.ReadAsync(_readmePath);
+                _readmeProcessor = new MarkdownProcessor(ControlsLoc, MarkdownHelpers.SafeUrlSchemes, []);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            Logger.LogWarning(exception, "Failed to load the dashboard README.");
+            _readmeLoadFailed = true;
         }
     }
 

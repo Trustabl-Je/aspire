@@ -455,6 +455,15 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         context.EnvironmentVariables[DashboardConfigNames.DashboardLaunchContextName.EnvVarName] = KnownDashboardLaunchContexts.AppHost;
         SetEnvironmentVariableWithFallback(
             context,
+            DashboardConfigNames.UIReadmeDirectoryName,
+            DashboardConfigNames.UIReadmeDirectoryName.ConfigKey,
+            defaultValue: configuration["AppHost:Directory"]);
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.UIReadmePathName,
+            DashboardConfigNames.UIReadmePathName.ConfigKey);
+        SetEnvironmentVariableWithFallback(
+            context,
             DashboardConfigNames.DashboardApplicationName,
             "AppHost:DashboardApplicationName",
             transform: DashboardService.GetDashboardApplicationName);

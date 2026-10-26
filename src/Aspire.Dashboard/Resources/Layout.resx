@@ -59,6 +59,15 @@
             : using a System.ComponentModel.TypeConverter
             : and then encoded with base64 encoding.
     -->
+  <data name="ReadmePanelToggle" xml:space="preserve">
+    <value>Toggle README panel</value>
+  </data>
+  <data name="ReadmePanelClose" xml:space="preserve">
+    <value>Close README panel</value>
+  </data>
+  <data name="ReadmePanelLoadError" xml:space="preserve">
+    <value>The README could not be loaded. Check the dashboard logs for details.</value>
+  </data>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
     <xsd:element name="root" msdata:IsDataSet="true">

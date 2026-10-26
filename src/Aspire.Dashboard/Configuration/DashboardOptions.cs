@@ -340,6 +340,9 @@ public sealed class TelemetryLimitOptions
 
 public sealed class UIOptions
 {
+    public string? ReadmeDirectory { get; set; }
+    public string? ReadmePath { get; set; }
+    public bool DisableReadme { get; set; }
     public bool? DisableResourceGraph { get; set; }
     public bool? DisableImport { get; set; }
     public bool? DisableAgentHelp { get; set; }

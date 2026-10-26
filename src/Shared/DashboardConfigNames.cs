@@ -49,6 +49,8 @@ internal static class DashboardConfigNames
     public static readonly ConfigName UIDisableResourceGraphName = new("Dashboard:UI:DisableResourceGraph", "DASHBOARD__UI__DISABLERESOURCEGRAPH");
     public static readonly ConfigName UIDisableImportName = new("Dashboard:UI:DisableImport", "DASHBOARD__UI__DISABLEIMPORT");
     public static readonly ConfigName UIDisableAgentHelpName = new("Dashboard:UI:DisableAgentHelp", "DASHBOARD__UI__DISABLEAGENTHELP");
+    public static readonly ConfigName UIReadmeDirectoryName = new("Dashboard:UI:ReadmeDirectory", "ASPIRE_DASHBOARD_README_DIRECTORY");
+    public static readonly ConfigName UIReadmePathName = new("Dashboard:UI:ReadmePath", "ASPIRE_DASHBOARD_README_PATH");
 
     public static class Legacy
     {

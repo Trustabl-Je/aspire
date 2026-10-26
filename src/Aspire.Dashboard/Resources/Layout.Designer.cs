@@ -24,6 +24,12 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Layout {
 
+        public static string ReadmePanelToggle => ResourceManager.GetString("ReadmePanelToggle", resourceCulture);
+
+        public static string ReadmePanelClose => ResourceManager.GetString("ReadmePanelClose", resourceCulture);
+
+        public static string ReadmePanelLoadError => ResourceManager.GetString("ReadmePanelLoadError", resourceCulture);
+
         private static global::System.Resources.ResourceManager resourceMan;
 
         private static global::System.Globalization.CultureInfo resourceCulture;

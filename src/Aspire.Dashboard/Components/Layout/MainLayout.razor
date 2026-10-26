@@ -4,7 +4,7 @@
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
 
-<div class="layout @(_isNavMenuExpanded ? "nav-expanded" : "nav-collapsed") @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
+<div class="layout @(_isNavMenuExpanded ? "nav-expanded" : "nav-collapsed") @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null) @(ViewportInformation.IsDesktop && _isReadmeOpen && (_readmePath is not null || _readmeLoadFailed) ? "readme-open" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     @if (ViewportInformation.IsDesktop)
     {
         @* Full-width top header. The Aspire logo leads the header so the logo, app name, and page
@@ -26,6 +26,15 @@
                 <SectionOutlet SectionName="@DashboardUIHelpers.PageTitleTopBarSection" />
             </div>
             <div class="flex-filler"></div>
+            @if (_readmePath is not null || _readmeLoadFailed)
+            {
+                <FluentButton Class="header-button"
+                              Appearance="ButtonAppearance.Default" OnClick="@(() => _isReadmeOpen = !_isReadmeOpen)"
+                              Title="@Loc[nameof(Layout.ReadmePanelToggle)]" aria-label="@Loc[nameof(Layout.ReadmePanelToggle)]"
+                              aria-expanded="@(_isReadmeOpen ? "true" : "false")" aria-controls="readme-panel">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.BookOpen())" Color="Color.Default"/>
+                </FluentButton>
+            }
             @if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;
@@ -144,6 +153,29 @@
             }
         </main>
     </div>
+
+    @if (ViewportInformation.IsDesktop && _isReadmeOpen && (_readmePath is not null || _readmeLoadFailed))
+    {
+        <aside id="readme-panel" class="readme-panel" aria-labelledby="readme-panel-title">
+            <div class="readme-panel-header">
+                <h2 id="readme-panel-title">@(Path.GetFileName(_readmePath) ?? "README.md")</h2>
+                <FluentButton Appearance="ButtonAppearance.Transparent"
+                              OnClick="@(() => _isReadmeOpen = false)"
+                              Title="@Loc[nameof(Layout.ReadmePanelClose)]" aria-label="@Loc[nameof(Layout.ReadmePanelClose)]"
+                              IconStart="@(new Icons.Regular.Size20.Dismiss())" />
+            </div>
+            <div class="readme-panel-content">
+                @if (_readmeLoadFailed)
+                {
+                    <p role="alert">@Loc[nameof(Layout.ReadmePanelLoadError)]</p>
+                }
+                else if (_readmeMarkdown is not null && _readmeProcessor is not null)
+                {
+                    <MarkdownRenderer Markdown="@_readmeMarkdown" MarkdownProcessor="@_readmeProcessor" SuppressParagraphOnNewLines="false" />
+                }
+            </div>
+        </aside>
+    }
 
     <DashboardDialogProvider/>
     <FluentTooltipProvider />

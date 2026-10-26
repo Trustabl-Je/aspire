@@ -93,6 +93,24 @@ public sealed class DashboardOptionsTests
             result.FailureMessage);
     }
 
+    [Fact]
+    public void PostConfigure_MapsReadmeEnvironmentAliases()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.UIReadmeDirectoryName.EnvVarName] = "/repo/AppHost",
+                [DashboardConfigNames.UIReadmePathName.EnvVarName] = "../tutorial.md"
+            })
+            .Build();
+        var options = new DashboardOptions();
+
+        new PostConfigureDashboardOptions(configuration).PostConfigure(null, options);
+
+        Assert.Equal("/repo/AppHost", options.UI.ReadmeDirectory);
+        Assert.Equal("../tutorial.md", options.UI.ReadmePath);
+    }
+
     [Theory]
     [InlineData(null, "Aspire")]
     [InlineData("", "Aspire")]

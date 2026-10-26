@@ -360,6 +360,10 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             {
                 ["Aspire:Store:Path"] = workspace.Path,
                 ["AppHost:DashboardApplicationName"] = "My App.AppHost",
+                ["AppHost:Directory"] = workspace.Path,
+                [DashboardConfigNames.UIReadmePathName.ConfigKey] = "tutorial.md",
+                [DashboardConfigNames.UIReadmeDirectoryName.EnvVarName] = configureExplicitAliases ? "explicit-directory" : null,
+                [DashboardConfigNames.UIReadmePathName.EnvVarName] = configureExplicitAliases ? "explicit.md" : null,
                 ["Aspire:Dashboard:PersistenceMode"] = configuredPersistenceMode,
                 [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = configuredPersistenceModeEnvironmentAlias,
                 [DashboardConfigNames.DashboardApplicationName.EnvVarName] = configureExplicitAliases ? explicitApplicationName : null
@@ -387,6 +391,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             environmentVariables[DashboardConfigNames.DashboardApplicationName.EnvVarName]);
         Assert.Equal(expectedPersistenceMode, environmentVariables[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName]);
         Assert.Equal(KnownDashboardLaunchContexts.AppHost, environmentVariables[DashboardConfigNames.DashboardLaunchContextName.EnvVarName]);
+        Assert.Equal(configureExplicitAliases ? "explicit-directory" : workspace.Path, environmentVariables[DashboardConfigNames.UIReadmeDirectoryName.EnvVarName]);
+        Assert.Equal(configureExplicitAliases ? "explicit.md" : "tutorial.md", environmentVariables[DashboardConfigNames.UIReadmePathName.EnvVarName]);
     }
 
     [Theory]

@@ -162,6 +162,21 @@
         <target state="translated">Visualizza filtri</target>
         <note />
       </trans-unit>
+      <trans-unit id="ReadmePanelClose">
+        <source>Close README panel</source>
+        <target state="new">Close README panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ReadmePanelLoadError">
+        <source>The README could not be loaded. Check the dashboard logs for details.</source>
+        <target state="new">The README could not be loaded. Check the dashboard logs for details.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ReadmePanelToggle">
+        <source>Toggle README panel</source>
+        <target state="new">Toggle README panel</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

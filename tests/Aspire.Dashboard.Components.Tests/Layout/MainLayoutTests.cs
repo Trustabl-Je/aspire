@@ -11,6 +11,7 @@ using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
+using Aspire.Tests.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
@@ -28,6 +29,64 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 public partial class MainLayoutTests : DashboardTestContext
 {
     private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
+
+    [Fact]
+    public void ReadmePanel_RendersMarkdownAndCanBeClosedAndReopened()
+    {
+        using var workspace = TemporaryWorkspace.Create(Xunit.TestContext.Current.TestOutputHelper!);
+        var path = Path.Combine(workspace.Path, "README.md");
+        File.WriteAllText(path, "# Getting started\n\nWelcome to **Aspire**.");
+        SetupMainLayoutServices(configureOptions: options => options.UI.ReadmePath = path);
+        JSInterop.SetupModule("/Components/Controls/MarkdownRenderer.razor.js")
+            .SetupVoid("highlightCodeBlocks", _ => true).SetVoidResult();
+
+        var cut = Render<MainLayout>(builder => builder
+            .Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        cut.WaitForAssertion(() => Assert.Equal("Aspire", cut.Find("#readme-panel strong").TextContent));
+        Assert.Equal("Getting started", cut.Find("#readme-panel h4").TextContent);
+        Assert.Contains("readme-open", cut.Find(".layout").ClassList);
+        cut.Find("fluent-button[aria-label='Close README panel']").Click();
+        Assert.Empty(cut.FindAll("#readme-panel"));
+        Assert.Equal("false", cut.Find("fluent-button[aria-controls='readme-panel']").GetAttribute("aria-expanded"));
+
+        cut.Find("fluent-button[aria-controls='readme-panel']").Click();
+        Assert.Equal("true", cut.Find("fluent-button[aria-controls='readme-panel']").GetAttribute("aria-expanded"));
+        Assert.Equal("Aspire", cut.Find("#readme-panel strong").TextContent);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void ReadmePanel_DisabledOrMobile_DoesNotRender(bool desktop, bool disabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(Xunit.TestContext.Current.TestOutputHelper!);
+        SetupMainLayoutServices(configureOptions: options =>
+        {
+            options.UI.ReadmePath = Path.Combine(workspace.Path, "missing-readme.md");
+            options.UI.DisableReadme = disabled;
+        });
+
+        var cut = Render<MainLayout>(builder => builder
+            .Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: desktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        Assert.Empty(cut.FindAll("#readme-panel"));
+        Assert.Empty(cut.FindAll("fluent-button[aria-controls='readme-panel']"));
+    }
+
+    [Fact]
+    public void ReadmePanel_MissingConfiguredFile_DisplaysError()
+    {
+        using var workspace = TemporaryWorkspace.Create(Xunit.TestContext.Current.TestOutputHelper!);
+        SetupMainLayoutServices(configureOptions: options => options.UI.ReadmePath = Path.Combine(workspace.Path, "missing.md"));
+
+        var cut = Render<MainLayout>(builder => builder
+            .Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            Aspire.Dashboard.Resources.Layout.ReadmePanelLoadError,
+            cut.Find("#readme-panel [role='alert']").TextContent));
+    }
 
     [Fact]
     public void OnInitialize_BrowserInfoCircuitDisconnected_DoesNotThrow()
