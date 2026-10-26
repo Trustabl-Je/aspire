@@ -2,7 +2,7 @@
   "version": 1,
   "issue": 8728,
   "issue_url": "https://github.com/microsoft/aspire/issues/8728",
-  "phase": "agent",
+  "phase": "publication-intent",
   "created_at": "2026-10-26T21:19:51.977334+00:00",
   "base_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
   "control_sha": "40065c457181d2cb91bfb98d26500d1ecfe55fc0",
@@ -75,6 +75,16 @@
         "/tmp/gh-aw/flaky-investigation/context.json issue 8728 body: 'Assert.ThrowsAny() Failure: No exception was thrown' at DistributedApplicationTests.cs:line 940",
         "/tmp/gh-aw/flaky-investigation/source/tests/Aspire.Hosting.Tests/DistributedApplicationTests.cs:1717-1746: ProxylessEndpointWorks, QuarantinedTest, probes http://localhost:5156/pid expecting an exception"
       ]
+    },
+    {
+      "run_id": 40406709073,
+      "action": "finish",
+      "explanation": "Three clean baseline rounds (single, single, quarantined-project contention) on ubuntu-latest: 27 runner-iterations, 0 failures; target passed in every iteration (9+9+9). Failure not reproduced; no root cause established, so no fix proposed.",
+      "evidence_read": [
+        "/tmp/gh-aw/flaky-investigation/source/.agents/skills/fix-flaky-test/SKILL.md: 'Do NOT skip ahead to writing a code fix'",
+        "/tmp/gh-aw/flaky-investigation/context.json: history shows passed 9/9/9, failed 0/0/0",
+        "/tmp/gh-aw/flaky-investigation/evidence/40405798259/ubuntu-latest/1/iteration-1/Aspire.Hosting.Tests_net10.0_x64.trx: ProxylessEndpointWorks outcome=Passed"
+      ]
     }
   ],
   "candidate": null,
@@ -93,8 +103,8 @@
     "status": "skipped",
     "reason": "Linux runner, but the solution was not restored/built and the DCP orchestrator and test project prerequisites were not verified; skipped in this bounded phase in favor of hosted reproduction."
   },
-  "outcome": null,
-  "updated_at": "2026-10-26T21:43:15.841341+00:00",
+  "outcome": "not-reproduced",
+  "updated_at": "2026-10-26T21:48:43.513629+00:00",
   "transitions": [
     {
       "phase": "ready",
@@ -170,6 +180,11 @@
       "phase": "agent",
       "reason": "Fresh model dispatched; wait for the complete run and immutable proposal.",
       "at": "2026-10-26T21:43:15.841341+00:00"
+    },
+    {
+      "phase": "publication-intent",
+      "reason": "Terminal not-reproduced decision; publication not yet confirmed.",
+      "at": "2026-10-26T21:48:43.513629+00:00"
     }
   ],
   "agent": {
@@ -216,5 +231,15 @@
     "mode": "project",
     "branch": "ankj/flaky-test-8728-run-3",
     "id": 40405798259
+  },
+  "explanation": "Three clean baseline rounds (single, single, quarantined-project contention) on ubuntu-latest: 27 runner-iterations, 0 failures; target passed in every iteration (9+9+9). Failure not reproduced; no root cause established, so no fix proposed.",
+  "analysis": {
+    "why_no_fix": "ProxylessEndpointWorks passed in all 27 hosted iterations including project-contention mode; the reported 'No exception was thrown' failure was not reproduced and no root cause was established.",
+    "attempted": [
+      "Read the issue, test source at base SHA and context checkpoint.",
+      "Reviewed TRX from three hosted rounds (single x2, project contention): 0 failures.",
+      "Local precheck skipped (solution not built); relied on hosted reproduction."
+    ],
+    "next_action": "Keep the test quarantined; a maintainer could investigate whether a leftover ServiceA process holds port 5156 in the original failing environment."
   }
 }
