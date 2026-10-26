@@ -865,21 +865,50 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Init_SolutionModeUsesSolutionRootSourceConfigurationAndRefreshesIt(bool existingBinding)
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    public async Task Init_SolutionModeUsesAppHostConfigurationAndRefreshesIt(bool existingAppHost, bool appHostConfig, bool existingBinding)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Test.sln"), "Fake solution file");
         var childPath = Path.Combine(workspace.Path, "Test.AppHost");
-        var configPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        if (existingBinding)
+        var projectPath = Path.Combine(childPath, "Test.AppHost.csproj");
+        var rootConfigPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(rootConfigPath, """
+            {"appHost":{"path":"Test.AppHost/Test.AppHost.csproj"},"custom":"solution","docs":{"llmsTxtUrl":"https://solution.example/llms.txt"}}
+            """);
+        if (appHostConfig)
+        {
+            await TestConfigSourceServices.SaveBindingAsync(new ConfigSource
+            {
+                Repository = "https://solution.example/configuration",
+                Path = "solution.json",
+                AppliedVersion = "solution-version"
+            }, workspace.WorkspaceRoot, CancellationToken.None);
+        }
+        const string templateConfig = """
+            {"appHost":{"path":"Test.AppHost.csproj"},"profiles":{"custom":{"applicationUrl":"https://localhost:1234"}},"custom":"template"}
+            """;
+        if (existingAppHost)
         {
             Directory.CreateDirectory(childPath);
-            await TestConfigSourceServices.SaveBindingAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
-            await ConfigurationService.SetConfigurationInFileAsync(configPath, "appHost.path", "Test.AppHost/Test.AppHost.csproj");
+            await File.WriteAllTextAsync(projectPath, "<Project />");
+            if (appHostConfig)
+            {
+                await File.WriteAllTextAsync(Path.Combine(childPath, AspireConfigFile.FileName), templateConfig);
+            }
+        }
+        var configDirectory = appHostConfig ? new DirectoryInfo(childPath) : workspace.WorkspaceRoot;
+        var configPath = Path.Combine(configDirectory.FullName, AspireConfigFile.FileName);
+        if (existingBinding)
+        {
+            await TestConfigSourceServices.SaveBindingAsync(s_source, configDirectory, CancellationToken.None);
             await ConfigurationService.SetConfigurationInFileAsync(configPath, "docs.llmsTxtUrl", "https://local.example/llms.txt");
         }
+        var originalRootConfiguration = await File.ReadAllTextAsync(rootConfigPath);
         var originalConfiguration = existingBinding ? await File.ReadAllTextAsync(configPath) : null;
         var services = CreateCreationServices(workspace);
         services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "default"));
@@ -896,9 +925,11 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         });
         services.AddSingleton<Aspire.Cli.DotNet.IDotNetCliRunner>(new TestDotNetCliRunner
         {
-            NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+            NewProjectAsyncCallback = (_, name, outputPath, _, _) =>
             {
                 Directory.CreateDirectory(outputPath);
+                File.WriteAllText(Path.Combine(outputPath, $"{name}.csproj"), "<Project />");
+                File.WriteAllText(Path.Combine(outputPath, AspireConfigFile.FileName), templateConfig);
                 return 0;
             }
         });
@@ -919,6 +950,13 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             }));
         }
         using var provider = services.BuildServiceProvider();
+        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        ConfigSource? checkedSource = null;
+        git.Check = (source, _) =>
+        {
+            checkedSource = source;
+            return Task.FromResult(("commit-2", "version-2"));
+        };
         var command = existingBinding
             ? "init --language csharp --suppress-agent-init --non-interactive"
             : "init --language csharp --suppress-agent-init --use-config-source true --non-interactive";
@@ -929,22 +967,30 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var sources = provider.GetRequiredService<ConfigSourceService>();
         await sources.WaitForChecksAsync().DefaultTimeout();
 
-        var configuration = AspireConfigFile.Load(workspace.Path)!;
+        var configuration = AspireConfigFile.Load(configDirectory.FullName)!;
         Assert.Equivalent(s_source, configuration.ConfigSource, strict: true);
         Assert.Equal(existingBinding ? "https://local.example/llms.txt" : "https://docs.example/llms.txt", configuration.Docs?.LlmsTxtUrl);
         Assert.True(Directory.Exists(childPath));
-        Assert.False(File.Exists(Path.Combine(childPath, AspireConfigFile.FileName)));
-        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        Assert.Equal(appHostConfig, File.Exists(Path.Combine(childPath, AspireConfigFile.FileName)));
+        Assert.Equal(appHostConfig ? "Test.AppHost.csproj" : "Test.AppHost/Test.AppHost.csproj", configuration.AppHost!.Path);
+        if (appHostConfig)
+        {
+            Assert.Equal("https://localhost:1234", configuration.Profiles!["custom"].ApplicationUrl);
+            Assert.Equal(originalRootConfiguration, await File.ReadAllTextAsync(rootConfigPath));
+        }
         Assert.Equal(existingBinding ? 0 : 1, git.Calls);
         Assert.Equal(existingBinding ? 1 : 0, git.CheckCalls);
         if (existingBinding)
         {
+            Assert.NotNull(checkedSource);
+            Assert.True(ConfigSource.HasSameIdentity(s_source, checkedSource));
             Assert.Equal(originalConfiguration, await File.ReadAllTextAsync(configPath));
         }
+        else
+        {
+            Assert.Null(checkedSource);
+        }
 
-        var projectPath = Path.Combine(childPath, "Test.AppHost.csproj");
-        await File.WriteAllTextAsync(projectPath, "<Project />");
-        await ConfigurationService.SetConfigurationInFileAsync(configPath, "appHost.path", "Test.AppHost/Test.AppHost.csproj");
         using var refreshProvider = CreateCreationServices(workspace).BuildServiceProvider();
         var refreshGit = Assert.IsType<TestConfigSourceGitClient>(refreshProvider.GetRequiredService<IConfigSourceGitClient>());
         refreshGit.Acquire = (source, _) =>
@@ -960,11 +1006,16 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await refresh.InvokeAsync().DefaultTimeout());
 
-        var refreshed = AspireConfigFile.Load(workspace.Path)!;
+        var refreshed = AspireConfigFile.Load(configDirectory.FullName)!;
         Assert.Equal("version-2", refreshed.ConfigSource!.AppliedVersion);
         Assert.Equal("https://updated.example/llms.txt", refreshed.Docs!.LlmsTxtUrl);
-        Assert.Equal("Test.AppHost/Test.AppHost.csproj", refreshed.AppHost!.Path);
-        Assert.False(File.Exists(Path.Combine(childPath, AspireConfigFile.FileName)));
+        Assert.Equal(configuration.AppHost.Path, refreshed.AppHost!.Path);
+        Assert.Equal(appHostConfig, File.Exists(Path.Combine(childPath, AspireConfigFile.FileName)));
+        if (appHostConfig)
+        {
+            Assert.Equal("https://localhost:1234", refreshed.Profiles!["custom"].ApplicationUrl);
+            Assert.Equal(originalRootConfiguration, await File.ReadAllTextAsync(rootConfigPath));
+        }
         Assert.Equal(1, refreshGit.Calls);
         Assert.Equal(0, refreshGit.CheckCalls);
     }

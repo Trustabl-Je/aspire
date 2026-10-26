@@ -19,6 +19,7 @@ internal sealed class ConfigSourceTestContext
     private readonly SequenceCounter _counter;
     private readonly CancellationToken _cancellationToken;
     private string _repository;
+    private string _configurationRelativePath = "SourceApp/aspire.config.json";
 
     private ConfigSourceTestContext(
         TemporaryWorkspace workspace, Hex1bTerminalAutomator auto, SequenceCounter counter, CancellationToken cancellationToken)
@@ -59,6 +60,20 @@ internal sealed class ConfigSourceTestContext
         await _auto.RunCommandAsync($"{NewCommand} --use-config-source true --non-interactive", _counter,
             timeout: TimeSpan.FromMinutes(3));
         await ConfigureProjectAsync();
+    }
+
+    public async Task InitializeSolutionAsync()
+    {
+        await _auto.RunCommandAsync("mkdir SourceApp && cd SourceApp && dotnet new sln --name SourceApp", _counter);
+        await _auto.RunCommandAsync(
+            "aspire init --language csharp --suppress-agent-init --use-config-source true --non-interactive",
+            _counter, timeout: TimeSpan.FromMinutes(3));
+        await _auto.RunCommandAsync(
+            "test ! -f aspire.config.json && test -f SourceApp.AppHost/aspire.config.json && " +
+            "cd SourceApp.AppHost && aspire config set docs.custom keep", _counter);
+        _configurationRelativePath = "SourceApp/SourceApp.AppHost/aspire.config.json";
+        var configuration = await ReadConfigurationAsync();
+        Assert.Equal("SourceApp.AppHost.csproj", configuration["appHost"]!["path"]!.GetValue<string>());
     }
 
     public async Task CreateProjectWithNestedAppHostAsync()
@@ -234,7 +249,8 @@ internal sealed class ConfigSourceTestContext
     {
         // Source materialization creates an owner-only file inside the container. Export its
         // contents without changing those permissions so the host can assert the saved values.
-        await _auto.RunCommandAsync("cat \"$ASPIRE_E2E_WORKSPACE/SourceApp/aspire.config.json\" > \"$ASPIRE_E2E_WORKSPACE/actual-config.json\"", _counter);
+        await _auto.RunCommandAsync(
+            $"cat \"$ASPIRE_E2E_WORKSPACE/{_configurationRelativePath}\" > \"$ASPIRE_E2E_WORKSPACE/actual-config.json\"", _counter);
         return JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_root, "actual-config.json"), _cancellationToken))!.AsObject();
     }
 

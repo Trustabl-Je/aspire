@@ -10,6 +10,18 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
+    public Task Init_SolutionModeBindsAndRefreshesAppHostConfiguration()
+        => ConfigSourceTestContext.RunAsync(output, async context =>
+        {
+            await context.InitializeSolutionAsync();
+            var original = await context.AssertSourceAppliedAsync("original");
+            await context.UpdateSourceAsync();
+            await context.RefreshConfigurationAsync(expectChanges: true);
+            await context.AssertConfigurationUpdatedAsync(original);
+        });
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
     public Task New_AppliesEnvironmentConfigurationSource()
         => ConfigSourceTestContext.RunAsync(output, async context =>
         {
