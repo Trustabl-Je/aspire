@@ -1,39 +1,31 @@
-name: Flaky investigation controller validation
-run-name: "Flaky investigation ${{ inputs.operation }}: ${{ inputs.issue_url }}"
+name: Flaky investigation recovery validation
+run-name: "Recover flaky investigation: ${{ inputs.issue_url }}"
 on:
   workflow_dispatch:
     inputs:
       issue_url:
         required: true
         type: string
-      operation:
-        required: true
-        type: choice
-        options: [start, resume, cancel]
-        default: start
 permissions:
   actions: write
   contents: write
-  issues: write
-  pull-requests: write
 concurrency:
-  group: flaky-investigation-upstream-${{ inputs.issue_url }}
+  group: flaky-investigation-recovery-${{ inputs.issue_url }}
   cancel-in-progress: false
 jobs:
-  advance:
+  recover:
     runs-on: ubuntu-latest
-    timeout-minutes: 70
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Advance checkpoints and await owned external runs
+      - name: Reconcile exact owned runs and recover expired outer jobs
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE_URL: ${{ inputs.issue_url }}
-          OPERATION: ${{ inputs.operation }}
-          FLAKY_AGENT_WORKFLOW: reproduce-flaky-tests.yml
-          FLAKY_AGENT_SHA: "44aa95af2ab9b3a9a2be1c673a9fa75cc67d9c6a"
-          FLAKY_WORKER_SHA: "e57778c84e8f0bce064ff4b9abe7b4bcf6af2a5c"
-          FLAKY_PROOF_BASELINE_ONLY: "true"
-        run: python3 .github/scripts/flaky-investigation-upstream-driver.py
+          INPUT_ISSUE_URL: ${{ inputs.issue_url }}
+          RECOVERY_ENROLLMENT: '{"issue_url":"https://github.com/microsoft/aspire/issues/9672","control_sha":"9a4ab756620648f2f45e730591a69d224a9f495f","agent_sha":"44aa95af2ab9b3a9a2be1c673a9fa75cc67d9c6a","worker_sha":"e57778c84e8f0bce064ff4b9abe7b4bcf6af2a5c","control_branch":"ankj/flaky-investigation-control-e57778c84e8f"}'
+          RECOVERY_INITIAL_OUTER: '40411973673'
+        run: |
+          python3 -c 'import json, os; assert os.environ["INPUT_ISSUE_URL"] == json.loads(os.environ["RECOVERY_ENROLLMENT"])["issue_url"]'
+          python3 .github/scripts/flaky-investigation-recovery.py
