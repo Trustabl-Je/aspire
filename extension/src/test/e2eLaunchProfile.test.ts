@@ -1426,36 +1426,58 @@ builder.Build().Run();
         const aspireDebugSessionTests = fs.readFileSync(path.join(extensionRoot, 'src', 'test', 'aspireDebugSession.test.ts'), 'utf8');
         const debugBrowserTest = getTestBlock(debugDashboard, 'starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
         const normalizedDebugBrowserTest = debugBrowserTest.replace(/\r\n/g, '\n');
+        const normalizedDebugDashboard = debugDashboard.replace(/\r\n/g, '\n');
         const nonblockingUnitTest = getTestBlock(aspireDebugSessionTests, 'openDashboard does not wait for a dashboard debug session to start');
         const nonWindowsSkip = `if (process.platform !== 'win32') {
             this.skip();
         }`;
-        const cleanupStartIndex = normalizedDebugBrowserTest.indexOf('await runE2eTeardown([');
-        const cleanupStopIndex = normalizedDebugBrowserTest.indexOf("() => executeE2eControlCommand({ name: 'stopDebugging' })", cleanupStartIndex);
-        const cleanupAspireWaitIndex = normalizedDebugBrowserTest.indexOf('() => waitForNoDebugSessions()', cleanupStopIndex);
-        const cleanupBrowserWaitIndex = normalizedDebugBrowserTest.indexOf('() => waitForNoBrowserDebugSessions()', cleanupAspireWaitIndex);
-        const browserFailureRethrowIndex = normalizedDebugBrowserTest.indexOf('if (browserLaunchError) {\n            throw browserLaunchError;');
+        const teardownStartIndex = normalizedDebugDashboard.indexOf('teardown(async function () {');
+        const teardownEndIndex = normalizedDebugDashboard.indexOf("test('debugs the AppHost with unconfigured dashboard launch defaults'", teardownStartIndex);
+        const teardownBlock = normalizedDebugDashboard.slice(teardownStartIndex, teardownEndIndex);
+        const cleanupStartIndex = teardownBlock.indexOf('await runE2eTeardown([');
+        const cleanupStopIndex = teardownBlock.indexOf("() => executeE2eControlCommand({ name: 'stopDebugging' }, { timeoutMs: debugStopTimeoutMs })", cleanupStartIndex);
+        const cleanupAspireWaitIndex = teardownBlock.indexOf('waitForNoDebugSessions(debugSessionCleanupTimeoutMs)', cleanupStopIndex);
+        const cleanupBrowserWaitIndex = teardownBlock.indexOf('waitForNoBrowserDebugSessions(browserDebugSessionCleanupTimeoutMs)', cleanupAspireWaitIndex);
 
         assert.deepStrictEqual({
             nonWindowsSkipPrecedesDashboardBrowserSetting: normalizedDebugBrowserTest.indexOf(nonWindowsSkip) >= 0
                 && normalizedDebugBrowserTest.indexOf(nonWindowsSkip) < normalizedDebugBrowserTest.indexOf("writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome')"),
-            waitsForBrowserDebugSession: debugBrowserTest.includes('await waitForBrowserDebugSession()'),
-            waitsForNoBrowserDebugSessions: debugBrowserTest.includes('waitForNoBrowserDebugSessions()'),
+            hasIndependentValidationBudget: normalizedDebugDashboard.includes('const debugDashboardBrowserTestTimeoutMs = 900000;')
+                && normalizedDebugBrowserTest.includes('this.timeout(debugDashboardBrowserTestTimeoutMs);'),
+            hasIndependentCleanupBudget: normalizedDebugDashboard.includes('const debugDashboardTeardownTimeoutMs = 900000;')
+                && teardownBlock.includes('this.timeout(debugDashboardTeardownTimeoutMs);'),
+            waitsForBrowserDebugSession: normalizedDebugDashboard.includes('const browserDebugSessionStartTimeoutMs = 120000;')
+                && debugBrowserTest.includes('await waitForBrowserDebugSession(browserDebugSessionStartTimeoutMs)'),
+            requiresBrowserCleanup: normalizedDebugBrowserTest.includes('requireBrowserDebugSessionCleanup = true;'),
             cancelsKnownLaunchFailureDialog: debugBrowserTest.includes("await acceptModalDialog('Cancel', 10000, 'dashboard-debug-launch-failure', 'Unable to launch browser');"),
-            completesEveryCleanupAfterStopFailure: cleanupStartIndex >= 0
+            rethrowsBrowserFailureBeforeCleanup: normalizedDebugBrowserTest.includes('throw browserLaunchError;')
+                && !normalizedDebugBrowserTest.includes('await runE2eTeardown(['),
+            completesEveryCleanupAfterStopFailure: teardownStartIndex >= 0
+                && teardownEndIndex > teardownStartIndex
+                && cleanupStartIndex >= 0
                 && cleanupStartIndex < cleanupStopIndex
                 && cleanupStopIndex < cleanupAspireWaitIndex
-                && cleanupAspireWaitIndex < cleanupBrowserWaitIndex
-                && cleanupBrowserWaitIndex < browserFailureRethrowIndex,
+                && cleanupAspireWaitIndex < cleanupBrowserWaitIndex,
+            usesExplicitCleanupTimeouts: teardownBlock.includes("executeE2eControlCommand({ name: 'stopDebugging' }, { timeoutMs: debugStopTimeoutMs })")
+                && teardownBlock.includes('waitForNoDebugSessions(debugSessionCleanupTimeoutMs)')
+                && teardownBlock.includes('waitForNoBrowserDebugSessions(browserDebugSessionCleanupTimeoutMs)')
+                && teardownBlock.includes('const failOnBrowserDebugSessionCleanup = requireBrowserDebugSessionCleanup;')
+                && normalizedDebugDashboard.includes('const debugStopTimeoutMs = 180000;')
+                && normalizedDebugDashboard.includes('const debugSessionCleanupTimeoutMs = 90000;')
+                && normalizedDebugDashboard.includes('const browserDebugSessionCleanupTimeoutMs = 120000;'),
             hasNonblockingUnitTest: aspireDebugSessionTests.includes("test('openDashboard does not wait for a dashboard debug session to start'"),
             usesNeverSettlingBrowserLaunch: nonblockingUnitTest.includes('new Promise<boolean>(() => { })'),
             removedOptionalModalHelper: !vscodeHelpers.includes('export async function dismissModalDialogIfPresent('),
         }, {
             nonWindowsSkipPrecedesDashboardBrowserSetting: true,
+            hasIndependentValidationBudget: true,
+            hasIndependentCleanupBudget: true,
             waitsForBrowserDebugSession: true,
-            waitsForNoBrowserDebugSessions: true,
+            requiresBrowserCleanup: true,
             cancelsKnownLaunchFailureDialog: true,
+            rethrowsBrowserFailureBeforeCleanup: true,
             completesEveryCleanupAfterStopFailure: true,
+            usesExplicitCleanupTimeouts: true,
             hasNonblockingUnitTest: true,
             usesNeverSettlingBrowserLaunch: true,
             removedOptionalModalHelper: true,
