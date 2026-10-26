@@ -2,7 +2,7 @@
   "version": 1,
   "issue": 9672,
   "issue_url": "https://github.com/microsoft/aspire/issues/9672",
-  "phase": "ready",
+  "phase": "worker-intent",
   "created_at": "2026-10-26T22:23:06.019694+00:00",
   "base_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
   "control_sha": "9a4ab756620648f2f45e730591a69d224a9f495f",
@@ -11,9 +11,9 @@
   "agent_workflow": "reproduce-flaky-tests.yml",
   "used": {
     "models": 1,
-    "workers": 2,
+    "workers": 3,
     "fixes": 0,
-    "runner_iterations": 36
+    "runner_iterations": 54
   },
   "history": [
     {
@@ -85,7 +85,7 @@
     "reason": "Docker daemon unavailable on this Linux runner and no local test run was attempted within budget; hosted baseline needed to detect any reproduction."
   },
   "outcome": null,
-  "updated_at": "2026-10-26T22:41:52.565712+00:00",
+  "updated_at": "2026-10-26T22:41:55.412081+00:00",
   "transitions": [
     {
       "phase": "ready",
@@ -136,6 +136,11 @@
       "phase": "ready",
       "reason": "Accepted reproduce/single evidence: 18 target passes, 0 target failures; 18 actual tests.",
       "at": "2026-10-26T22:41:52.565712+00:00"
+    },
+    {
+      "phase": "worker-intent",
+      "reason": "Baseline 3/3 (project): previous clean baseline; continue the fixed policy without a model.",
+      "at": "2026-10-26T22:41:55.412081+00:00"
     }
   ],
   "agent": {
@@ -179,8 +184,7 @@
     "phase": "reproduce",
     "runners": 3,
     "iterations": 3,
-    "mode": "single",
-    "branch": "ankj/flaky-test-9672-run-2",
-    "id": 40413555891
+    "mode": "project",
+    "branch": "ankj/flaky-test-9672-run-3"
   }
 }
