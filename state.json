@@ -2,7 +2,7 @@
   "version": 1,
   "issue": 8728,
   "issue_url": "https://github.com/microsoft/aspire/issues/8728",
-  "phase": "agent",
+  "phase": "ready",
   "created_at": "2026-10-26T21:19:51.977334+00:00",
   "base_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
   "control_sha": "40065c457181d2cb91bfb98d26500d1ecfe55fc0",
@@ -16,12 +16,36 @@
     "runner_iterations": 0
   },
   "history": [],
-  "notes": [],
+  "notes": [
+    {
+      "run_id": 40403453037,
+      "action": "select",
+      "explanation": "Issue reports DistributedApplicationTests.ProxylessEndpointWorks (quarantined) failing with 'Assert.ThrowsAny() Failure: No exception was thrown' on Linux (/home/runner paths). The test asserts that launchSettings port localhost:5156 is unreachable, which can fail if another ServiceA instance from a concurrent/previous test holds that port (per a 2025-04-30 comment). Historical quarantine logs were not collected; the 2026-04-02 CI report (4/215 failures in 30 days, as of that date) was read only as a count. Local precheck skipped; hosted reproduction should decide.",
+      "evidence_read": [
+        "/tmp/gh-aw/flaky-investigation/source/.agents/skills/fix-flaky-test/SKILL.md: 'Do NOT skip ahead to writing a code fix ... follow every step in order'",
+        "/tmp/gh-aw/flaky-investigation/context.json issue 8728 body: 'Assert.ThrowsAny() Failure: No exception was thrown' at DistributedApplicationTests.cs:line 940",
+        "/tmp/gh-aw/flaky-investigation/source/tests/Aspire.Hosting.Tests/DistributedApplicationTests.cs:1717-1746: ProxylessEndpointWorks, QuarantinedTest, probes http://localhost:5156/pid expecting an exception"
+      ]
+    }
+  ],
   "candidate": null,
-  "target": null,
-  "local_precheck": null,
+  "target": {
+    "source": "tests/Aspire.Hosting.Tests/DistributedApplicationTests.cs",
+    "project": "tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj",
+    "class_name": "Aspire.Hosting.Tests.DistributedApplicationTests",
+    "method": "ProxylessEndpointWorks",
+    "oses": [
+      "ubuntu-latest"
+    ],
+    "failure_signature": "Assert.ThrowsAny() Failure: No exception was thrown",
+    "quarantined": true
+  },
+  "local_precheck": {
+    "status": "skipped",
+    "reason": "Linux runner, but the solution was not restored/built and the DCP orchestrator and test project prerequisites were not verified; skipped in this bounded phase in favor of hosted reproduction."
+  },
   "outcome": null,
-  "updated_at": "2026-10-26T21:20:01.213634+00:00",
+  "updated_at": "2026-10-26T21:25:04.595644+00:00",
   "transitions": [
     {
       "phase": "ready",
@@ -37,6 +61,11 @@
       "phase": "agent",
       "reason": "Fresh model dispatched; wait for the complete run and immutable proposal.",
       "at": "2026-10-26T21:20:01.213634+00:00"
+    },
+    {
+      "phase": "ready",
+      "reason": "Validated test selection and local precheck; start baseline directly.",
+      "at": "2026-10-26T21:25:04.595644+00:00"
     }
   ],
   "agent": {
@@ -45,5 +74,32 @@
     "branch": "ankj/flaky-test-8728-agent-1",
     "id": 40403453037,
     "revision": "d3d868092c2d759c82762ec0b8790a191fe2fd44"
-  }
+  },
+  "repair_scope": [
+    "src/Aspire.Dashboard/",
+    "src/Aspire.Hosting.Analyzers/",
+    "src/Aspire.Hosting.AppHost/",
+    "src/Aspire.Hosting.Azure.AppContainers/",
+    "src/Aspire.Hosting.Azure.ContainerRegistry/",
+    "src/Aspire.Hosting.Azure.OperationalInsights/",
+    "src/Aspire.Hosting.Azure/",
+    "src/Aspire.Hosting.DevTunnels/",
+    "src/Aspire.Hosting.JavaScript/",
+    "src/Aspire.Hosting.Python/",
+    "src/Aspire.Hosting.Tasks/",
+    "src/Aspire.Hosting.Testing/",
+    "src/Aspire.Hosting.Yarp/",
+    "src/Aspire.Hosting/",
+    "src/Aspire.TypeSystem/",
+    "tests/Aspire.Components.Common.TestUtilities/",
+    "tests/Aspire.Hosting.TestUtilities/",
+    "tests/Aspire.Hosting.Tests/",
+    "tests/Aspire.TestUtilities/",
+    "tests/testproject/TestProject.AppHost/",
+    "tests/testproject/TestProject.IntegrationServiceA/",
+    "tests/testproject/TestProject.ServiceA/",
+    "tests/testproject/TestProject.ServiceB/",
+    "tests/testproject/TestProject.ServiceC/",
+    "tests/testproject/TestProject.WorkerA/"
+  ]
 }
