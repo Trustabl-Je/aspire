@@ -600,10 +600,12 @@
     {
         // When the row no longer has room for every label, the container query swaps this for the compact dropdown
         // instead of letting the top navigation grow its own scrollbar.
-        var currentTabItem = GetTabs().FirstOrDefault(t => t.Tab == CurrentTab);
+        // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged).
+        var activeTab = _navigatingToTab ?? CurrentTab;
+        var currentTabItem = GetTabs().FirstOrDefault(t => t.Tab == activeTab);
     <div class="resource-tabs-nav">
         <FluentTabs Class="resources-tab-header"
-                    ActiveTabId="@GetTabId(CurrentTab)"
+                    ActiveTabId="@GetTabId(activeTab)"
                     ActiveTabChanged="@(tab => OnTabChanged(tab, isDesktop))"
                     aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)]"
                     Size="null">

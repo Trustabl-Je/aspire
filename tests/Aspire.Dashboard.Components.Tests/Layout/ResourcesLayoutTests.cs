@@ -367,6 +367,38 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Tabs_ClickedTabStaysActiveUntilItsPageShows()
+    {
+        // The tab strip is inline on narrow viewports; on desktop it's in the app's header, which isn't rendered here.
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: () => channel));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal("tab-Overview", cut.FindComponent<FluentTabs>().Instance.ActiveTabId));
+
+        Task SelectTabAsync(string id) => cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(
+            cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == id).Instance));
+
+        await SelectTabAsync("tab-Console");
+
+        // Until the router gives the layout the new page, the strip keeps the clicked tab. Rendering the previous tab
+        // would make the strip report it as a change once the new page shows, which navigated back, endlessly.
+        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
+        Assert.Equal("tab-Console", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        await SelectTabAsync("tab-Overview");
+        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
+
+        // Once the new page shows (the router sets the layout's parameters again), tab clicks navigate again.
+        cut.Render();
+        await SelectTabAsync("tab-Overview");
+        Assert.Equal("http://localhost/resources/api", navigation.Uri);
+    }
+
+    [Fact]
     public async Task RowActions_RunHighlightedCommandsAndOfferTheResourceMenu()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

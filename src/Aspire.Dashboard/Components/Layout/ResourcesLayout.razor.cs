@@ -64,6 +64,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _pendingLandingRedirect;
     private bool _hasLocation;
     private string? _lastLocation;
+    // The tab a click on the tab strip is navigating to, until the new location arrives. See OnTabChanged.
+    private ResourceTab? _navigatingToTab;
     private bool _isDisposed;
     private IReadOnlyList<string> _selectedResourceNames = [];
     private List<SelectedResourceItem> _selectedItems = [];
@@ -392,6 +394,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _lastLocation = location;
+        _navigatingToTab = null;
         var previousSelection = _selectedResourceNames;
         UpdateFromLocation(location);
         await ApplyPaneModeFromLocationAsync(location);
@@ -1750,7 +1753,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             || newTab?.Id is not { } id
             || !id.StartsWith("tab-", StringComparison.Ordinal)
             || !Enum.TryParse<ResourceTab>(id["tab-".Length..], out var tab)
-            || tab == CurrentTab)
+            || tab == CurrentTab
+            // A navigation started from the tab strip is still in flight. The layout re-renders when this handler
+            // returns, before the router reaches the new location, and that render must not put the previous tab
+            // back: the strip would report it as a change once the new page shows, and navigate back to it, forever.
+            || _navigatingToTab is not null)
         {
             return;
         }
@@ -1758,6 +1765,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // Tabs map to pages, so a tab change is a navigation. The tab URL keeps the current resource selection.
         if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is { } href)
         {
+            _navigatingToTab = tab;
             NavigationManager.NavigateTo(href);
         }
     }
