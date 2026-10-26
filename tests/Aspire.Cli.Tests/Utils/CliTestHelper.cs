@@ -161,6 +161,7 @@ internal static class CliTestHelper
         services.AddTransient(options.NuGetPackageCacheFactory);
         services.AddSingleton<TemplateNuGetConfigService>();
         services.AddSingleton(options.TemplateProviderFactory);
+        services.AddSingleton<ConfiguredTemplateSourceService>();
         // Template registration checks the real PATH, independently of command-specific environment fakes.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>(sp =>
             ActivatorUtilities.CreateInstance<DotNetTemplateFactory>(sp, new HostEnvironment())));

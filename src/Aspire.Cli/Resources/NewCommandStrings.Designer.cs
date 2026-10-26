@@ -24,6 +24,72 @@ namespace Aspire.Cli.Resources {
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class NewCommandStrings {
 
+        internal static string ConfiguredTemplateConflictingOptions {
+            get {
+                return ResourceManager.GetString("ConfiguredTemplateConflictingOptions", resourceCulture);
+            }
+        }
+
+        internal static string SearchForMoreTemplates {
+            get {
+                return ResourceManager.GetString("SearchForMoreTemplates", resourceCulture);
+            }
+        }
+
+        internal static string TemplateSearchPrompt {
+            get {
+                return ResourceManager.GetString("TemplateSearchPrompt", resourceCulture);
+            }
+        }
+
+        internal static string SearchingTemplateSources {
+            get {
+                return ResourceManager.GetString("SearchingTemplateSources", resourceCulture);
+            }
+        }
+
+        internal static string SearchTemplatesAgain {
+            get {
+                return ResourceManager.GetString("SearchTemplatesAgain", resourceCulture);
+            }
+        }
+
+        internal static string BackToDefaultTemplates {
+            get {
+                return ResourceManager.GetString("BackToDefaultTemplates", resourceCulture);
+            }
+        }
+
+        internal static string NoMatchingConfiguredTemplates {
+            get {
+                return ResourceManager.GetString("NoMatchingConfiguredTemplates", resourceCulture);
+            }
+        }
+
+        internal static string NoConfiguredTemplateSources {
+            get {
+                return ResourceManager.GetString("NoConfiguredTemplateSources", resourceCulture);
+            }
+        }
+
+        internal static string TemplateSourceSearchFailed {
+            get {
+                return ResourceManager.GetString("TemplateSourceSearchFailed", resourceCulture);
+            }
+        }
+
+        internal static string TemplateSourcesMustBeObject {
+            get {
+                return ResourceManager.GetString("TemplateSourcesMustBeObject", resourceCulture);
+            }
+        }
+
+        internal static string TemplateSourceMustBeAbsolutePath {
+            get {
+                return ResourceManager.GetString("TemplateSourceMustBeAbsolutePath", resourceCulture);
+            }
+        }
+
         private static global::System.Resources.ResourceManager resourceMan;
 
         private static global::System.Globalization.CultureInfo resourceCulture;

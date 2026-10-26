@@ -482,6 +482,9 @@ public class DotNetTemplateFactoryTests
 
     private sealed class TestNewCommandPrompter : INewCommandPrompter, ITemplateVersionPrompter
     {
+        public Task<TemplateSelection> PromptForTemplateOrSearchAsync(ITemplate[] templates, CancellationToken cancellationToken)
+            => throw new NotImplementedException();
+
         public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 

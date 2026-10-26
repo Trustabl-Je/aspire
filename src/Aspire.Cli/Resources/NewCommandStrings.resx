@@ -241,4 +241,37 @@
   <data name="NoTemplateVersionsFoundInChannel" xml:space="preserve">
     <value>No template versions found in channel '{0}'.</value>
   </data>
+  <data name="SearchForMoreTemplates" xml:space="preserve">
+    <value>Search for more templates</value>
+  </data>
+  <data name="ConfiguredTemplateConflictingOptions" xml:space="preserve">
+    <value>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</value>
+  </data>
+  <data name="TemplateSearchPrompt" xml:space="preserve">
+    <value>Search templates (leave empty to list all)</value>
+  </data>
+  <data name="SearchingTemplateSources" xml:space="preserve">
+    <value>Searching configured template sources...</value>
+  </data>
+  <data name="SearchTemplatesAgain" xml:space="preserve">
+    <value>Search again</value>
+  </data>
+  <data name="BackToDefaultTemplates" xml:space="preserve">
+    <value>Back to default templates</value>
+  </data>
+  <data name="NoMatchingConfiguredTemplates" xml:space="preserve">
+    <value>No matching templates were found in the configured sources.</value>
+  </data>
+  <data name="NoConfiguredTemplateSources" xml:space="preserve">
+    <value>No usable template sources are configured. Add an absolute directory path with 'aspire config set templates.&lt;name&gt; &lt;path&gt; --global'.</value>
+  </data>
+  <data name="TemplateSourceSearchFailed" xml:space="preserve">
+    <value>Could not search template source '{0}': {1}</value>
+  </data>
+  <data name="TemplateSourcesMustBeObject" xml:space="preserve">
+    <value>The global 'templates' setting must be an object containing named template sources.</value>
+  </data>
+  <data name="TemplateSourceMustBeAbsolutePath" xml:space="preserve">
+    <value>Template sources must have a nonempty name and an absolute directory path. Git and endpoint sources are not supported in global configuration yet.</value>
+  </data>
 </root>

@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="es" original="../NewCommandStrings.resx">
     <body>
+      <trans-unit id="BackToDefaultTemplates">
+        <source>Back to default templates</source>
+        <target state="new">Back to default templates</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to use for templates (stable, daily)</source>
         <target state="translated">Canal que se va a usar para plantillas (estable, diaria)</target>
@@ -15,6 +20,11 @@
       <trans-unit id="CloningTemplateRepository">
         <source>Cloning template repository...</source>
         <target state="new">Cloning template repository...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfiguredTemplateConflictingOptions">
+        <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
+        <target state="new">Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
@@ -77,9 +87,19 @@
         <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoConfiguredTemplateSources">
+        <source>No usable template sources are configured. Add an absolute directory path with 'aspire config set templates.&lt;name&gt; &lt;path&gt; --global'.</source>
+        <target state="new">No usable template sources are configured. Add an absolute directory path with 'aspire config set templates.&lt;name&gt; &lt;path&gt; --global'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoLocalTemplatesFound">
         <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
         <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoMatchingConfiguredTemplates">
+        <source>No matching templates were found in the configured sources.</source>
+        <target state="new">No matching templates were found in the configured sources.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
@@ -130,6 +150,21 @@
       <trans-unit id="ResolvingTemplateVersion">
         <source>Resolving template version...</source>
         <target state="translated">Resolviendo versión de plantilla...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchForMoreTemplates">
+        <source>Search for more templates</source>
+        <target state="new">Search for more templates</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchTemplatesAgain">
+        <source>Search again</source>
+        <target state="new">Search again</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchingTemplateSources">
+        <source>Searching configured template sources...</source>
+        <target state="new">Searching configured template sources...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -215,6 +250,26 @@
       <trans-unit id="TemplateRepositoryRefRequiresRepository">
         <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
         <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSearchPrompt">
+        <source>Search templates (leave empty to list all)</source>
+        <target state="new">Search templates (leave empty to list all)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceMustBeAbsolutePath">
+        <source>Template sources must have a nonempty name and an absolute directory path. Git and endpoint sources are not supported in global configuration yet.</source>
+        <target state="new">Template sources must have a nonempty name and an absolute directory path. Git and endpoint sources are not supported in global configuration yet.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSearchFailed">
+        <source>Could not search template source '{0}': {1}</source>
+        <target state="new">Could not search template source '{0}': {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcesMustBeObject">
+        <source>The global 'templates' setting must be an object containing named template sources.</source>
+        <target state="new">The global 'templates' setting must be an object containing named template sources.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

@@ -92,6 +92,42 @@ Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
 
+## Configured template directories
+
+Register named local template sources in the CLI's global configuration:
+
+```bash
+aspire config set templates.company /absolute/path/to/company-templates --global
+```
+
+This writes the following shape to the global `~/.aspire/aspire.config.json` file:
+
+```json
+{
+  "templates": {
+    "company": "/absolute/path/to/company-templates"
+  }
+}
+```
+
+Use an absolute path on your platform (for example, `C:\Templates` on Windows).
+Each directory can contain one or more .NET template-engine templates using
+`.template.config/template.json`. Project-level `templates` settings are not used.
+Git repositories and searchable endpoints are not supported as configured sources yet;
+the existing explicit `--template-repository` and `--template-path` options are unchanged.
+
+Run `aspire new` interactively and select **Search for more templates** beneath the
+default templates. Enter text to search template names and descriptions, or leave
+it empty to list everything. Matching is case-insensitive, and results show the
+source name to distinguish templates with identical names. Select a result to
+create a project with the normal local-template parameter prompts.
+Configured templates cannot be combined with `--source`, `--version`, `--channel`,
+or `--language`; package/version choices are owned by the template.
+
+Directories are scanned only when searching. A source that cannot be read produces
+a warning without blocking other sources. You can search again or return to the
+default templates without creating project files.
+
 ## Examples
 
 To initialize an empty C# AppHost without discovering incidental `.sln` or `.slnx` files, run this from the repository root:
