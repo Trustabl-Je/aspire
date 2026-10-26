@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "issue_url": "https://github.com/microsoft/aspire/issues/9672",
+  "state_revision": "b0459a28cf058a711bf322f7ecb4d78bc69fa243",
+  "action": "select",
+  "explanation": "Observed: issue reports collection fixture SlimTestProgramFixture.InitializeAsync threw TaskCanceledException at WaitReadyStateAsync (TestProgramFixture.cs:68). Test is quarantined with this issue. The 2026-05-13 CI report shows 0/100 recent failures on linux and windows, so the failure may be rare or already gone. Hypothesis (unverified): fixture start waits for services A/B/C log text and HTTP GETs under a shared LongTimeout token; slow startup/DCP on loaded runners cancels the token. Alternatives: environment/DCP startup hang, port contention (randomizePorts: false). Local: Linux runner, dotnet 10.0.401 present, but Docker daemon is unavailable and local run was not attempted (test needs DCP/service launch; time budget). Hosted baseline is needed to see whether any failure still reproduces.",
+  "evidence_read": [
+    "/tmp/gh-aw/flaky-investigation/context.json: issue body stack trace 'Collection fixture type Aspire.Hosting.Tests.SlimTestProgramFixture threw in InitializeAsync ... TaskCanceledException ... TestProgramFixture.cs:line 68'; comment 4174837657 (updated 2026-05-13): 0/100 failures linux and windows.",
+    "source/tests/Aspire.Hosting.Tests/SlimTestProgramTests.cs: [QuarantinedTest(issues/9672)] on TestProjectStartsAndStopsCleanly in [Collection(\"SlimTestProgram\")].",
+    "source/tests/Aspire.Hosting.Tests/TestProgramFixture.cs: InitializeAsync uses LongTimeoutDuration token; SlimTestProgramFixture.WaitReadyStateAsync waits for 'Application started.' on servicea/b/c plus HTTP GETs.",
+    "source/.agents/skills/fix-flaky-test/SKILL.md read (mandatory cycle header).",
+    "Probes: uname Linux x86_64; dotnet --version 10.0.401; docker ps: 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock'. Base SHA a7ea8cd890a45730295c921322f9ab9dba33258c."
+  ],
+  "selection": {
+    "source": "tests/Aspire.Hosting.Tests/SlimTestProgramTests.cs",
+    "project": "tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj",
+    "class_name": "Aspire.Hosting.Tests.SlimTestProgramTests",
+    "method": "TestProjectStartsAndStopsCleanly",
+    "oses": ["ubuntu-latest", "windows-latest"],
+    "failure_signature": "Collection fixture type 'Aspire.Hosting.Tests.SlimTestProgramFixture' threw in InitializeAsync"
+  },
+  "local_precheck": {
+    "status": "skipped",
+    "reason": "Docker daemon unavailable on this Linux runner and no local test run was attempted within budget; hosted baseline needed to detect any reproduction."
+  }
+}
