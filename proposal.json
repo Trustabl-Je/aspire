@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "issue_url": "https://github.com/microsoft/aspire/issues/8728",
+  "state_revision": "d3d868092c2d759c82762ec0b8790a191fe2fd44",
+  "action": "select",
+  "explanation": "Issue reports DistributedApplicationTests.ProxylessEndpointWorks (quarantined) failing with 'Assert.ThrowsAny() Failure: No exception was thrown' on Linux (/home/runner paths). The test asserts that launchSettings port localhost:5156 is unreachable, which can fail if another ServiceA instance from a concurrent/previous test holds that port (per a 2025-04-30 comment). Historical quarantine logs were not collected; the 2026-04-02 CI report (4/215 failures in 30 days, as of that date) was read only as a count. Local precheck skipped; hosted reproduction should decide.",
+  "evidence_read": [
+    "/tmp/gh-aw/flaky-investigation/source/.agents/skills/fix-flaky-test/SKILL.md: 'Do NOT skip ahead to writing a code fix ... follow every step in order'",
+    "/tmp/gh-aw/flaky-investigation/context.json issue 8728 body: 'Assert.ThrowsAny() Failure: No exception was thrown' at DistributedApplicationTests.cs:line 940",
+    "/tmp/gh-aw/flaky-investigation/source/tests/Aspire.Hosting.Tests/DistributedApplicationTests.cs:1717-1746: ProxylessEndpointWorks, QuarantinedTest, probes http://localhost:5156/pid expecting an exception"
+  ],
+  "selection": {
+    "source": "tests/Aspire.Hosting.Tests/DistributedApplicationTests.cs",
+    "project": "tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj",
+    "class_name": "Aspire.Hosting.Tests.DistributedApplicationTests",
+    "method": "ProxylessEndpointWorks",
+    "oses": ["ubuntu-latest"],
+    "failure_signature": "Assert.ThrowsAny() Failure: No exception was thrown"
+  },
+  "local_precheck": {
+    "status": "skipped",
+    "reason": "Linux runner, but the solution was not restored/built and the DCP orchestrator and test project prerequisites were not verified; skipped in this bounded phase in favor of hosted reproduction."
+  }
+}
