@@ -68,7 +68,7 @@ C# AppHosts created with Aspire 17 or later use package directives instead of th
 | Command | Description |
 |---------|-------------|
 | `config` | Manage CLI configuration including feature flags. |
-| `secret` | Manage AppHost user secrets. |
+| `secret` | Manage AppHost secrets. |
 | `cache` | Manage disk cache for CLI operations. |
 | `completions script [<shell>]` | Generate a completion script for Bash, Zsh, Fish, or PowerShell 7+. |
 | `doctor` | Diagnose Aspire environment issues and verify setup. |
@@ -85,6 +85,7 @@ aspire secret set Parameters:api_key
 aspire secret set Parameters:api_key example-value
 aspire secret set Parameters:api_key --envvar API_KEY
 aspire secret set Parameters:api_key --envvar API_KEY --apphost ./AppHost.csproj
+aspire secret set Parameters:api_key --envvar API_KEY --environment Production
 ```
 
 When neither a positional value nor `--envvar` is supplied, the CLI prompts
@@ -96,6 +97,8 @@ Do not combine a positional value with `--envvar`. An unset source
 variable fails without prompting, initializing, or modifying the secrets store.
 Environment values are stored verbatim, without trimming or shell expansion.
 AppHost discovery works the same for all value sources.
+All value sources support `--environment` to select the AppHost environment's
+Aspire secrets file; the default environment is `Development`.
 
 `--envvar` keeps the secret value out of the command line, shell history,
 and CLI diagnostics. Expanding a shell variable into the positional value does
@@ -227,7 +230,7 @@ bundle or tray payload fails explicitly; install a platform-matching bundle cont
 companion rather than using a standalone CLI binary.
 
 Before upgrading from an older preview, quit its running companion using its
-**Quit** menu action. Preview single-instance identifiers have changed, so
+**Quit** action. Preview single-instance identifiers have changed, so
 `aspire tray stop` in this version does not manage an older preview's instance.
 
 ### AppHost snapshot output
@@ -451,6 +454,12 @@ aspire config set --global certificates.nssDbPaths "firefox=/path/to/firefox/pro
 Prefix a path with `firefox=` or `chromium=` to apply the trust settings expected by that browser family.
 
 The `certificates.nssDbPaths` setting takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable. When the Aspire setting has no value, the CLI preserves the upstream behavior.
+
+## Diagnostic log privacy
+
+On Unix, CLI diagnostic log files use owner-only read/write permissions (`0600`), including when an existing log file is reused. The dedicated Aspire logs directory uses owner-only access (`0700`), repairing permissions if it already exists. Newly created custom log directories also use `0700`; existing custom parent directories and Windows file permission behavior are unchanged.
+
+Diagnostic logs can contain sensitive data, including dashboard login URLs captured from AppHost output. Review logs before sharing them.
 
 ## Additional documentation
 

@@ -31,21 +31,22 @@ internal sealed class SecretSetCommand : BaseCommand
         Arity = ArgumentArity.ExactlyOne
     };
 
-    private readonly SecretStoreResolver _secretStoreResolver;
+    private readonly AspireSecretsStoreResolver _secretsStoreResolver;
     private readonly IEnvironment _environment;
 
     public SecretSetCommand(
-        SecretStoreResolver secretStoreResolver,
+        AspireSecretsStoreResolver secretsStoreResolver,
         IEnvironment environment,
         CommonCommandServices services)
         : base("set", SecretCommandStrings.SetDescription, services)
     {
-        _secretStoreResolver = secretStoreResolver;
+        _secretsStoreResolver = secretsStoreResolver;
         _environment = environment;
 
         Arguments.Add(s_keyArgument);
         Arguments.Add(s_valueArgument);
         Options.Add(SecretCommand.s_appHostOption);
+        Options.Add(SecretCommand.s_environmentOption);
         Options.Add(s_envvarSourceOption);
 
         Validators.Add(result =>
@@ -94,17 +95,16 @@ internal sealed class SecretSetCommand : BaseCommand
         }
 
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
+        var environment = parseResult.GetValue(SecretCommand.s_environmentOption);
 
-        // autoInit: true — when setting a secret, automatically initialize user secrets
-        // if not yet configured (e.g., run 'dotnet user-secrets init' for csproj projects)
-        var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: true, cancellationToken);
+        var result = await _secretsStoreResolver.ResolveAsync(projectFile, environment, autoInitDevelopmentUserSecrets: true, cancellationToken);
         if (result is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
-        result.Store.Set(key, value);
-        result.Store.Save();
+        result.AspireStore.Set(key, value);
+        result.AspireStore.Save();
 
         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretSetSuccess, key));
         return CommandResult.Success();
