@@ -75,6 +75,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string InvalidSecretsFile {
+            get {
+                return ResourceManager.GetString("InvalidSecretsFile", resourceCulture);
+            }
+        }
+
         internal static string AllEnvironmentsOptionDescription {
             get {
                 return ResourceManager.GetString("AllEnvironmentsOptionDescription", resourceCulture);
