@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "enrollment": {
+    "issue_url": "https://github.com/microsoft/aspire/issues/9672",
+    "control_sha": "9a4ab756620648f2f45e730591a69d224a9f495f",
+    "agent_sha": "44aa95af2ab9b3a9a2be1c673a9fa75cc67d9c6a",
+    "worker_sha": "e57778c84e8f0bce064ff4b9abe7b4bcf6af2a5c",
+    "control_branch": "ankj/flaky-investigation-control-e57778c84e8f"
+  },
+  "deadline": 1793096586.019694,
+  "outer": 40411973673,
+  "resumes": 0,
+  "children": {},
+  "pending_dispatch": null,
+  "cancellations": {},
+  "status": "active"
+}
