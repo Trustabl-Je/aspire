@@ -85,6 +85,47 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public async Task SecretDeleteCommand_MalformedLegacyWithCanonicalStorePreservesBothFiles()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var aspirePath = AspireSecretsStoreResolver.GetSecretsFilePath(workspace.WorkspaceRoot, userSecretsId, "Development");
+        var legacyPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        const string canonicalJson = """{"ConnectionStrings:db":"Data Source=0.0.0.0\\sql;Database=Synthetic"}""";
+        const string malformedJson = """{"ConnectionStrings:db":"Data Source=0.0.0.0\sql;Database=Synthetic"}""";
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        Directory.CreateDirectory(Path.GetDirectoryName(aspirePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(legacyPath)!);
+        await File.WriteAllTextAsync(aspirePath, canonicalJson);
+        await File.WriteAllTextAsync(legacyPath, malformedJson);
+
+        try
+        {
+            using var provider = CreateSecretTestServices(workspace, outputWriter, appHostFile, new TestAppHostProject(userSecretsId), errorWriter);
+            var command = provider.GetRequiredService<RootCommand>();
+
+            var exitCode = await command.Parse($"secret delete ConnectionStrings:db --apphost \"{appHostFile.FullName}\"")
+                .InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+            var error = errorWriter.ToString();
+            Assert.Contains(legacyPath, error);
+            Assert.Contains("invalid JSON (line 1, byte position 46)", error);
+            Assert.Contains("Fix the JSON", error);
+            Assert.Empty(outputWriter.Logs);
+            Assert.Equal(canonicalJson, await File.ReadAllTextAsync(aspirePath));
+            Assert.Equal(malformedJson, await File.ReadAllTextAsync(legacyPath));
+        }
+        finally
+        {
+            File.Delete(legacyPath);
+        }
+    }
+
     [Theory]
     [InlineData("Development")]
     [InlineData("Production")]

@@ -262,7 +262,7 @@ internal sealed class AspireSecretsStoreResolver(
         aspireStore.Save();
     }
 
-    private static SecretsStore LoadSecretsStore(string path)
+    internal static SecretsStore LoadSecretsStore(string path)
     {
         try
         {
