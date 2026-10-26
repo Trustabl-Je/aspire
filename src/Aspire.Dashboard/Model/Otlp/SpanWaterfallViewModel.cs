@@ -56,12 +56,11 @@ public sealed class SpanWaterfallViewModel
     {
         var orderedSpans = new List<SpanWaterfallViewModel>();
         var groupedLogs = logs.GroupBy(l => l.SpanId).ToDictionary(l => l.Key, g => g.ToList());
-        var currentSpanLogIndex = 0;
 
         TraceHelpers.VisitSpans(trace, (OtlpSpan span, SpanWaterfallViewModelState s) =>
         {
             groupedLogs.TryGetValue(span.SpanId, out var spanLogs);
-            var viewModel = CreateViewModel(span, s.Depth, s.Hidden, state, spanLogs, ref currentSpanLogIndex);
+            var viewModel = CreateViewModel(span, s.Depth, s.Hidden, state, spanLogs);
             orderedSpans.Add(viewModel);
 
             s.Parent?.Children.Add(viewModel);
@@ -71,7 +70,7 @@ public sealed class SpanWaterfallViewModel
 
         return orderedSpans;
 
-        static SpanWaterfallViewModel CreateViewModel(OtlpSpan span, int depth, bool hidden, TraceDetailState state, List<LogSummary>? spanLogs, ref int currentSpanLogIndex)
+        static SpanWaterfallViewModel CreateViewModel(OtlpSpan span, int depth, bool hidden, TraceDetailState state, List<LogSummary>? spanLogs)
         {
             var traceStart = span.Trace.FirstSpan.StartTime;
             var relativeStart = span.StartTime - traceStart;
@@ -98,7 +97,7 @@ public sealed class SpanWaterfallViewModel
 
                     spanLogVms.Add(new SpanLogEntryViewModel
                     {
-                        Index = currentSpanLogIndex++,
+                        Index = spanLogVms.Count,
                         LogEntry = log,
                         LeftOffset = CalculatePercent(logRelativeStart.TotalMilliseconds, rootDuration)
                     });

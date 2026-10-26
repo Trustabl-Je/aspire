@@ -36,7 +36,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private const string TraceColumn = nameof(TraceColumn);
     private const string ActionsColumn = nameof(ActionsColumn);
 
-    private readonly EndAnchorItemsProviderState _endAnchorItemsProviderState = new();
     private SelectViewModel<ResourceTypeDetails> _allResource = default!;
 
     private TotalItemsFooter _totalItemsFooter = default!;
@@ -186,11 +185,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         else
         {
             TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
-        }
-
-        if (_endAnchorItemsProviderState.GetInitialResult(request.StartIndex, logs.Items, virtualizedLogCount) is { } initialResult)
-        {
-            return GridItemsProviderResult.From(initialResult.Items, initialResult.TotalItemCount);
         }
 
         return GridItemsProviderResult.From(logs.Items, virtualizedLogCount);
@@ -466,10 +460,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
 
-        if (_endAnchorItemsProviderState.TryBeginRefresh())
-        {
-            await _dataGrid!.RefreshDataAndRenderAsync();
-        }
     }
 
     private string? PauseText => PauseManager.AreStructuredLogsPaused(out var startTime)

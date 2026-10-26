@@ -17,6 +17,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Templating;
+using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
@@ -110,8 +111,10 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_channelOption);
         Options.Add(_languageOption);
         Options.Add(_fileBasedOption);
+        Options.Add(ConfigSourceService.s_useSourceOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
-        Options.Add(AgentInitCommand.s_skillLocationsOption);
+        Options.Add(AgentInitCommand.s_agentsOption);
+        Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
     }
 
@@ -143,6 +146,18 @@ internal sealed class InitCommand : BaseCommand
             solutionFile = await _solutionLocator.FindSolutionFileAsync(workingDirectory, cancellationToken);
         }
 
+        var configurationDirectory = workingDirectory;
+        if (solutionFile is not null)
+        {
+            var appHostDirectory = GetSolutionAppHostDirectory(solutionFile);
+            // A new template creates its own config beside the AppHost, hiding any parent
+            // config. Existing AppHosts keep using their nearest configuration instead.
+            configurationDirectory = appHostDirectory.Exists
+                ? ConfigurationHelper.GetConfigRootDirectory(appHostDirectory)
+                : appHostDirectory;
+        }
+        var configSource = await ConfigSources.SelectForInitializationAsync(configurationDirectory, parseResult, cancellationToken);
+
         // Step 3: Drop the skeleton AppHost and any related config files needed for that mode.
         var dropResult = isCSharp
             ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
@@ -151,6 +166,13 @@ internal sealed class InitCommand : BaseCommand
         if (dropResult != CliExitCodes.Success)
         {
             return CommandResult.Failure(dropResult, InteractionServiceStrings.ProjectCouldNotBeCreated);
+        }
+
+        if (configSource is not null)
+        {
+            // Apply the source after scaffolding so it merges with the generated configuration
+            // and a failed skeleton drop does not persist a new binding.
+            await ConfigSources.MaterializeAsync(configSource, configurationDirectory, cancellationToken);
         }
 
         // Persist the prompted language selection now that the skeleton drop succeeded.
@@ -172,8 +194,6 @@ internal sealed class InitCommand : BaseCommand
         // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
-        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
         // (which includes aspireify as the natural follow-up wiring skill). This chained flow
         // never registers `--mcp`, so MCP configuration is unavailable here by construction —
@@ -183,15 +203,16 @@ internal sealed class InitCommand : BaseCommand
             CliExitCodes.Success,
             workspaceRoot,
             agentInitBinding,
-            skillLocationsBinding,
-            skillsBinding,
+            PromptBinding.Create(parseResult, AgentInitCommand.s_agentsOption),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
             agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
         {
-            var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
+            var commands = GetAspireifyCommands(agentInitResult.SelectedClients);
             if (commands.Count > 0)
             {
                 InteractionService.DisplayEmptyLine();
@@ -229,16 +250,16 @@ internal sealed class InitCommand : BaseCommand
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<SkillLocation> selectedLocations)
+    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<AgentClient> selectedClients)
     {
         var commands = new List<string>();
 
-        if (selectedLocations.Contains(SkillLocation.ClaudeCode))
+        if (selectedClients.Contains(AgentClient.ClaudeCode))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedLocations.Contains(SkillLocation.OpenCode))
+        if (selectedClients.Contains(AgentClient.OpenCode))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }
@@ -255,6 +276,9 @@ internal sealed class InitCommand : BaseCommand
 
         return await DropCSharpSingleFileSkeletonAsync(workingDirectory, cancellationToken);
     }
+
+    private static DirectoryInfo GetSolutionAppHostDirectory(FileInfo solutionFile)
+        => new(Path.Combine(solutionFile.Directory!.FullName, $"{Path.GetFileNameWithoutExtension(solutionFile.Name)}.AppHost"));
 
     private async Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
@@ -344,9 +368,9 @@ internal sealed class InitCommand : BaseCommand
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
     {
         var solutionDir = solutionFile.Directory!;
-        var solutionName = Path.GetFileNameWithoutExtension(solutionFile.Name);
-        var appHostDirName = $"{solutionName}.AppHost";
-        var appHostDirPath = Path.Combine(solutionDir.FullName, appHostDirName);
+        var appHostDirectory = GetSolutionAppHostDirectory(solutionFile);
+        var appHostDirName = appHostDirectory.Name;
+        var appHostDirPath = appHostDirectory.FullName;
 
         // Drop the solution-directory NuGet.config BEFORE the AppHost-dir-already-exists
         // early return so re-running `aspire init` against a workspace produced by a
