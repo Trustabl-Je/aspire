@@ -1,0 +1,13 @@
+﻿{
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "teams/platform.json",
+    "appliedVersion": "version-2"
+  },
+  "docs": {
+    "custom": "preserved",
+    "api": {
+      "sitemapUrl": "https://remote.example/sitemap.xml"
+    }
+  }
+}

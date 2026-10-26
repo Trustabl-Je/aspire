@@ -846,6 +846,40 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(["llmsTxtUrl", "api"], settings["docs"]!.AsObject().Select(p => p.Key));
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Update_NormalizesNestedColonKeysBeforeReplacingLeaves(bool flattenedLocal, bool flattenedSource)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        configuration["docs"] = JsonNode.Parse(flattenedLocal
+            ? """{"api:sitemapUrl":"https://local.example/sitemap.xml","custom":"preserved"}"""
+            : """{"api":{"sitemapUrl":"https://local.example/sitemap.xml"},"custom":"preserved"}""");
+        await File.WriteAllTextAsync(path, configuration.ToJsonString());
+        var git = new TestConfigSourceGitClient
+        {
+            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", JsonNode.Parse(flattenedSource
+                ? """{"docs":{"api:sitemapUrl":"https://remote.example/sitemap.xml"}}"""
+                : """{"docs":{"api":{"sitemapUrl":"https://remote.example/sitemap.xml"}}}""")!.AsObject()))
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
+
+        await service.CheckProjectAsync(workspace.WorkspaceRoot, force: true, CancellationToken.None);
+
+        var content = await File.ReadAllTextAsync(path);
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var parsed = new ConfigurationManager();
+        parsed.AddJsonStream(stream);
+        Assert.Equal("https://remote.example/sitemap.xml", parsed["docs:api:sitemapUrl"]);
+        Assert.Equal("preserved", parsed["docs:custom"]);
+        Assert.Equal("version-2", parsed["configSource:appliedVersion"]);
+        await Verify(content, "json").UseParameters(flattenedLocal, flattenedSource);
+    }
+
     [Fact]
     public async Task Update_ReplacesLeavesInTheirExistingCaseInsensitiveSections()
     {

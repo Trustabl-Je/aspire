@@ -441,6 +441,9 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("""{"DOCS":{"API":{"SITEMAPURL":"nested"}},"docs:api:other":"flat","docs:api:sitemapUrl":"flat"}""", "nested")]
     [InlineData("""{"DOCS":{"API":{"SITEMAPURL":null}},"docs:api:other":"flat","docs:api:sitemapUrl":"flat"}""", "flat")]
+    [InlineData("""{"DOCS":{"API:SITEMAPURL":"flat","API:other":"flat"}}""", "flat")]
+    [InlineData("""{"DOCS":{"API":{"SITEMAPURL":"nested"},"API:SITEMAPURL":"flat","API:other":"flat"}}""", "nested")]
+    [InlineData("""{"DOCS":{"API":{"SITEMAPURL":null},"API:SITEMAPURL":"flat","API:other":"flat"}}""", "flat")]
     public void NormalizeSettings_MergesMixedCaseSegmentsAndPreservesNestedPrecedence(string json, string expectedValue)
     {
         var settings = JsonNode.Parse(json)!.AsObject();
@@ -455,6 +458,40 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedValue, api["SITEMAPURL"]!.GetValue<string>());
         Assert.Equal("flat", api["other"]!.GetValue<string>());
         Assert.False(ConfigurationHelper.NormalizeSettings(settings));
+    }
+
+    [Fact]
+    public async Task NormalizeSettings_NestedColonKeysRespectCompletePathsAcrossSections()
+    {
+        var settings = JsonNode.Parse("""
+            {
+              "DOCS": {
+                "custom": "preserved",
+                "API:other": null,
+                "api:sitemapUrl": "partially-flat",
+                "api:custom:enabled": false,
+                "api:object": { "nested:value": 42 }
+              },
+              "docs": { "api": { "SITEMAPURL": "nested", "other": true } },
+              "docs:api:sitemapUrl": "flat",
+              "docs:api:rootOnly": "root",
+              "flags": { "nested": { "enabled:value": true } }
+            }
+            """)!.AsObject();
+
+        Assert.True(ConfigurationHelper.NormalizeSettings(settings));
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(settings.ToJsonString()));
+        using var configuration = new ConfigurationManager();
+        configuration.AddJsonStream(stream);
+        Assert.Equal("nested", configuration["docs:api:sitemapUrl"]);
+        Assert.True(configuration.GetValue<bool>("docs:api:other"));
+        Assert.False(configuration.GetValue<bool>("docs:api:custom:enabled"));
+        Assert.Equal(42, configuration.GetValue<int>("docs:api:object:nested:value"));
+        Assert.Equal("root", configuration["docs:api:rootOnly"]);
+        Assert.True(configuration.GetValue<bool>("flags:nested:enabled:value"));
+        Assert.False(ConfigurationHelper.NormalizeSettings(settings));
+        await Verify(settings.ToJsonString(), "json");
     }
 
     [Fact]

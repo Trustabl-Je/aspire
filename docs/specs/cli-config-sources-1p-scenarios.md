@@ -204,20 +204,20 @@ From Inventory's project directory, he runs:
 aspire docs list
 ```
 
-The command reads Inventory's saved documentation settings. It does not fetch configuration to fill in runtime values, and it does not copy Maya's tracking directory.
+The command reads Inventory's saved documentation settings. Documentation commands do not perform advisory source checks, fetch configuration to fill in runtime values, or copy Maya's tracking directory.
 
-The saved binding identifies the source for an advisory version check. Noah does not need `ASPIRE_INIT_SOURCE_URL`, and Aspire does not repeat employee detection or the creation-time consent prompt. With no prior check metadata on his machine, the CLI checks the source's version and compares it with Inventory's saved `appliedVersion`, without writing a fetched JSON snapshot or changing the app file.
+When Noah later runs a command that resolves the project or selects a running AppHost, such as `aspire start` or `aspire logs`, the saved binding identifies the source for a background advisory version check. Noah does not need `ASPIRE_INIT_SOURCE_URL`, and Aspire does not repeat employee detection or the creation-time consent prompt. With no prior check metadata on his machine, the CLI checks the source's version and compares it with Inventory's saved `appliedVersion`, without writing a fetched JSON snapshot or changing the app file.
 
-Noah can prepare Git authentication as Maya did. If access is unavailable or the check fails, the CLI reports that failure and continues the requested operation with the saved app configuration. Documentation hosts still need to be independently accessible.
+Noah can prepare Git authentication as Maya did. If a check completes with an access or other failure, the CLI reports that failure at command exit; the requested operation continues using the saved app configuration. Unfinished checks are cancelled at command exit, so a fast command may produce no check result. Machine-readable invocations suppress advisory notices. Documentation hosts still need to be independently accessible.
 
 The behavior is project-scoped:
 
-- A bound project's ordinary commands use its app file and only check the source for update availability.
+- A bound project's ordinary commands use its app file; commands that resolve the project or select a running AppHost also check the source for update availability.
 - A project without a binding does not check or acquire a source merely because Noah is a Microsoft employee or another project uses one.
 - Changing initialization environment variables does not retarget Inventory's saved binding.
 - Having a tracking entry does not opt another project into using the source or supply that project's settings.
 
-For example, subsequent `aspire start`, `aspire logs`, and `aspire docs search` invocations check when due and report a newer version or check failure on stderr. They do not automatically merge new source values into Inventory.
+For example, subsequent `aspire start` and `aspire logs` invocations check when due and report completed update notices or check failures on stderr at command exit. `aspire docs list` and `aspire docs search` only consume the saved documentation settings and do not check the source. None of these commands automatically merges new source values into Inventory.
 
 The binding's applied version records what was copied into this app, not which branch or commit to follow. Inventory has no explicit `ref`, so its checks and updates follow the repository's current default branch. An explicit branch tracks that branch; an explicit commit SHA pins the source, as shown in scenario 6.
 
