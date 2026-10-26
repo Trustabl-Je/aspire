@@ -14,6 +14,36 @@ namespace Aspire.Hosting.Go.Tests;
 
 public class AddGoAppTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void AddGoApp_RequestsPlatformCertificateTrustScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory);
+
+        Assert.True(app.Resource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var annotation));
+        var expectedScope = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? CertificateTrustScope.System
+            : CertificateTrustScope.Append;
+        Assert.Equal(expectedScope, annotation.Scope);
+    }
+
+    [Theory]
+    [InlineData(CertificateTrustScope.Append)]
+    [InlineData(CertificateTrustScope.System)]
+    [InlineData(CertificateTrustScope.Override)]
+    [InlineData(CertificateTrustScope.None)]
+    public void AddGoApp_WithCertificateTrustScope_OverridesDefault(CertificateTrustScope scope)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithCertificateTrustScope(scope);
+
+        Assert.True(app.Resource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var annotation));
+        Assert.Equal(scope, annotation.Scope);
+    }
+
     // ---- Manifest: go run . (baseline) ------------------------------------
 
     [Fact]

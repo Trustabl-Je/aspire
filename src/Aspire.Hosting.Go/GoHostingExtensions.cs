@@ -87,6 +87,11 @@ public static class GoHostingExtensions
 
         var rb = builder.AddResource(resource)
             .WithIconName("Code")
+            // Go 1.27 replaces system trust on Windows and macOS when SSL_CERT_DIR or SSL_CERT_FILE
+            // is set, so the generated bundle must include system roots on those platforms.
+            .WithCertificateTrustScope(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                ? CertificateTrustScope.System
+                : CertificateTrustScope.Append)
             .WithArgs(ctx =>
             {
                 var programArgs = ctx.Resource.TryGetLastAnnotation<GoAppArgsAnnotation>(out var argsAnnotation)
