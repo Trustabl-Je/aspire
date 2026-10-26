@@ -239,13 +239,18 @@ function cancelReconnect(state) {
 }
 
 function notifyProgramStatus(state) {
-    if (state.disposed || state.programStatusFrame !== null) {
+    if (state.disposed) {
+        return;
+    }
+    state.programStatusPending = true;
+    if (state.programStatusInFlight || state.programStatusFrame !== null) {
         return;
     }
     // HWT1 exposes a complete inventory, e.g. { records: [{ id: "deploy/east", state: "working", ... }] }.
-    // Coalesce inventories separately from high-frequency toolbar/geometry updates.
+    // Keep only the latest inventory while interop is pending, so a slow circuit cannot queue snapshots.
     state.programStatusFrame = requestAnimationFrame(() => {
         state.programStatusFrame = null;
+        state.programStatusPending = false;
         if (state.disposed || !state.dotNetRef) {
             return;
         }
@@ -261,12 +266,21 @@ function notifyProgramStatus(state) {
             return;
         }
         state.lastProgramStatusJson = json;
-        Promise.resolve().then(() =>
-            state.dotNetRef?.invokeMethodAsync("OnTerminalProgramStatusChanged", snapshot)
-        ).catch(error => {
+        state.programStatusInFlight = true;
+        Promise.resolve().then(() => {
+            if (state.disposed || snapshot.generation !== state.generation || snapshot.statusEpoch !== state.statusEpoch) {
+                return;
+            }
+            return state.dotNetRef?.invokeMethodAsync("OnTerminalProgramStatusChanged", snapshot);
+        }).catch(error => {
             if (!state.disposed) {
                 state.lastProgramStatusJson = null;
                 console.warn("Dashboard terminal program status update failed.", error);
+            }
+        }).finally(() => {
+            state.programStatusInFlight = false;
+            if (state.programStatusPending) {
+                notifyProgramStatus(state);
             }
         });
     });
@@ -917,6 +931,8 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         statusEpoch: options.statusEpoch ?? 0,
         hasProgramStatus: false,
         programStatusFrame: null,
+        programStatusPending: false,
+        programStatusInFlight: false,
         lastProgramStatusJson: null,
         peer: { id: null, primaryId: null, isPrimary: false },
         geometry: null,

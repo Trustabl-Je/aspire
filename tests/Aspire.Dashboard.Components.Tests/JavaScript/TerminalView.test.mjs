@@ -331,6 +331,90 @@ test("a status followed by clearing in one frame still records first observation
     assert.deepEqual(programStatuses[0].records, []);
 });
 
+test("program status keeps one interop call in flight and sends only the latest pending inventory", async () => {
+    const pending = Promise.withResolvers();
+    const { id } = mount({ dotNetRef: { invokeMethodAsync(name, value) {
+        if (name === "OnTerminalProgramStatusChanged") {
+            programStatuses.push(value);
+            return pending.promise;
+        }
+    } } });
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "working", progress: 1 }] });
+    await settle();
+    for (let progress = 2; progress <= 5; progress++) {
+        attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "working", progress }] });
+        await settle();
+    }
+    assert.equal(programStatuses.length, 1);
+    pending.resolve();
+    await settle();
+    assert.deepEqual(programStatuses, [
+        { terminalId: id, generation: 1, hasStatus: true, statusEpoch: 0, records: [{ id: "", state: "working", progress: 1 }] },
+        { terminalId: id, generation: 1, hasStatus: true, statusEpoch: 0, records: [{ id: "", state: "working", progress: 5 }] },
+    ]);
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "working", progress: 5 }] });
+    await settle();
+    assert.equal(programStatuses.length, 2, "Identical pending inventories must not be resent");
+});
+
+test("program status replaces pending inventories when the endpoint changes", async () => {
+    const pending = Promise.withResolvers();
+    const { id } = mount({ dotNetRef: { invokeMethodAsync(name, value) {
+        if (name === "OnTerminalProgramStatusChanged") {
+            programStatuses.push(value);
+            return pending.promise;
+        }
+    } } });
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "working" }] });
+    await settle();
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "done" }] });
+    await settle();
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other", false, 1);
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "error" }] });
+    await settle();
+    assert.equal(programStatuses.length, 1);
+    pending.resolve();
+    await settle();
+    assert.deepEqual(programStatuses.at(-1), { terminalId: id, generation: 2, hasStatus: false, statusEpoch: 1, records: [] });
+    assert.equal(programStatuses.length, 2);
+});
+
+test("disposing while status interop is pending discards unsent inventories", async () => {
+    const pending = Promise.withResolvers();
+    const { id } = mount({ dotNetRef: { invokeMethodAsync(name, value) {
+        if (name === "OnTerminalProgramStatusChanged") {
+            programStatuses.push(value);
+            return pending.promise;
+        }
+    } } });
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "working" }] });
+    await settle();
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "done" }] });
+    terminal.disposeTerminal(id);
+    pending.resolve();
+    await settle();
+    assert.equal(programStatuses.length, 1);
+});
+
+test("failed status interop reports the error and delivers the latest pending inventory", async () => {
+    const pending = Promise.withResolvers();
+    mount({ dotNetRef: { invokeMethodAsync(name, value) {
+        if (name === "OnTerminalProgramStatusChanged") {
+            programStatuses.push(value);
+            return programStatuses.length === 1 ? pending.promise : Promise.resolve();
+        }
+    } } });
+    attempts[0].options.onProgramStatusChange({ records: [{ id: "", state: "working" }] });
+    await settle();
+    attempts[0].options.onProgramStatusChange({ records: [] });
+    const error = new Error("Circuit unavailable");
+    pending.reject(error);
+    await settle();
+    assert.deepEqual(programStatuses.map(s => s.records), [[{ id: "", state: "working" }], []]);
+    assert.deepEqual(console.warn.mock.calls.map(call => call.arguments),
+        [["Dashboard terminal program status update failed.", error]]);
+});
+
 test("initial empty inventories do not make status controls available", async () => {
     mount();
     attempts[0].options.onProgramStatusChange({ records: [] });

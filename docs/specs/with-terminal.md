@@ -72,6 +72,8 @@ The Dashboard circuit accepts bounded messages up to 4 MiB so a complete OSC 750
 inventory (up to 256 records, including 2 KiB messages) can cross JS interop with
 JSON escaping overhead. Endpoint changes invalidate queued status callbacks before
 reconnecting, so a previous terminal cannot reopen the panel on a new terminal.
+Only one status interop call is sent at a time; updates received while it is
+pending are coalesced into the latest inventory rather than queued.
 
 The `terminal-features` resource in `playground/Terminals` demonstrates reports,
 nested updates, subtree clearing, and complete inventory clearing. It includes
