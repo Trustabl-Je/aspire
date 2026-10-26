@@ -2,7 +2,7 @@
   "version": 1,
   "issue": 9672,
   "issue_url": "https://github.com/microsoft/aspire/issues/9672",
-  "phase": "agent",
+  "phase": "ready",
   "created_at": "2026-10-26T22:23:06.019694+00:00",
   "base_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
   "control_sha": "9a4ab756620648f2f45e730591a69d224a9f495f",
@@ -16,12 +16,43 @@
     "runner_iterations": 0
   },
   "history": [],
-  "notes": [],
+  "notes": [
+    {
+      "run_id": 40412027539,
+      "action": "select",
+      "explanation": "Observed: issue reports collection fixture SlimTestProgramFixture.InitializeAsync threw TaskCanceledException at WaitReadyStateAsync (TestProgramFixture.cs:68). Test is quarantined with this issue. The 2026-05-13 CI report shows 0/100 recent failures on linux and windows, so the failure may be rare or already gone. Hypothesis (unverified): fixture start waits for services A/B/C log text and HTTP GETs under a shared LongTimeout token; slow startup/DCP on loaded runners cancels the token. Alternatives: environment/DCP startup hang, port contention (randomizePorts: false). Local: Linux runner, dotnet 10.0.401 present, but Docker daemon is unavailable and local run was not attempted (test needs DCP/service launch; time budget). Hosted baseline is needed to see whether any failure still reproduces.",
+      "evidence_read": [
+        "/tmp/gh-aw/flaky-investigation/context.json: issue body stack trace 'Collection fixture type Aspire.Hosting.Tests.SlimTestProgramFixture threw in InitializeAsync ... TaskCanceledException ... TestProgramFixture.cs:line 68'; comment 4174837657 (updated 2026-05-13): 0/100 failures linux and windows.",
+        "source/tests/Aspire.Hosting.Tests/SlimTestProgramTests.cs: [QuarantinedTest(issues/9672)] on TestProjectStartsAndStopsCleanly in [Collection(\"SlimTestProgram\")].",
+        "source/tests/Aspire.Hosting.Tests/TestProgramFixture.cs: InitializeAsync uses LongTimeoutDuration token; SlimTestProgramFixture.WaitReadyStateAsync waits for 'Application started.' on servicea/b/c plus HTTP GETs.",
+        "source/.agents/skills/fix-flaky-test/SKILL.md read (mandatory cycle header).",
+        "Probes: uname Linux x86_64; dotnet --version 10.0.401; docker ps: 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock'. Base SHA a7ea8cd890a45730295c921322f9ab9dba33258c."
+      ],
+      "local_precheck": {
+        "status": "skipped",
+        "reason": "Docker daemon unavailable on this Linux runner and no local test run was attempted within budget; hosted baseline needed to detect any reproduction."
+      }
+    }
+  ],
   "candidate": null,
-  "target": null,
-  "local_precheck": null,
+  "target": {
+    "source": "tests/Aspire.Hosting.Tests/SlimTestProgramTests.cs",
+    "project": "tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj",
+    "class_name": "Aspire.Hosting.Tests.SlimTestProgramTests",
+    "method": "TestProjectStartsAndStopsCleanly",
+    "oses": [
+      "ubuntu-latest",
+      "windows-latest"
+    ],
+    "failure_signature": "Collection fixture type 'Aspire.Hosting.Tests.SlimTestProgramFixture' threw in InitializeAsync",
+    "quarantined": true
+  },
+  "local_precheck": {
+    "status": "skipped",
+    "reason": "Docker daemon unavailable on this Linux runner and no local test run was attempted within budget; hosted baseline needed to detect any reproduction."
+  },
   "outcome": null,
-  "updated_at": "2026-10-26T22:23:15.239795+00:00",
+  "updated_at": "2026-10-26T22:27:32.789379+00:00",
   "transitions": [
     {
       "phase": "ready",
@@ -37,6 +68,11 @@
       "phase": "agent",
       "reason": "Fresh model dispatched; wait for the complete run and immutable proposal.",
       "at": "2026-10-26T22:23:15.239795+00:00"
+    },
+    {
+      "phase": "ready",
+      "reason": "Validated test selection and local precheck; start baseline directly.",
+      "at": "2026-10-26T22:27:32.789379+00:00"
     }
   ],
   "agent": {
@@ -45,5 +81,32 @@
     "branch": "ankj/flaky-test-9672-agent-1",
     "id": 40412027539,
     "revision": "b0459a28cf058a711bf322f7ecb4d78bc69fa243"
-  }
+  },
+  "repair_scope": [
+    "src/Aspire.Dashboard/",
+    "src/Aspire.Hosting.Analyzers/",
+    "src/Aspire.Hosting.AppHost/",
+    "src/Aspire.Hosting.Azure.AppContainers/",
+    "src/Aspire.Hosting.Azure.ContainerRegistry/",
+    "src/Aspire.Hosting.Azure.OperationalInsights/",
+    "src/Aspire.Hosting.Azure/",
+    "src/Aspire.Hosting.DevTunnels/",
+    "src/Aspire.Hosting.JavaScript/",
+    "src/Aspire.Hosting.Python/",
+    "src/Aspire.Hosting.Tasks/",
+    "src/Aspire.Hosting.Testing/",
+    "src/Aspire.Hosting.Yarp/",
+    "src/Aspire.Hosting/",
+    "src/Aspire.TypeSystem/",
+    "tests/Aspire.Components.Common.TestUtilities/",
+    "tests/Aspire.Hosting.TestUtilities/",
+    "tests/Aspire.Hosting.Tests/",
+    "tests/Aspire.TestUtilities/",
+    "tests/testproject/TestProject.AppHost/",
+    "tests/testproject/TestProject.IntegrationServiceA/",
+    "tests/testproject/TestProject.ServiceA/",
+    "tests/testproject/TestProject.ServiceB/",
+    "tests/testproject/TestProject.ServiceC/",
+    "tests/testproject/TestProject.WorkerA/"
+  ]
 }
