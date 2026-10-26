@@ -2,7 +2,7 @@
   "version": 1,
   "issue": 9672,
   "issue_url": "https://github.com/microsoft/aspire/issues/9672",
-  "phase": "publication-intent",
+  "phase": "terminal",
   "created_at": "2026-10-26T22:23:06.019694+00:00",
   "base_sha": "a7ea8cd890a45730295c921322f9ab9dba33258c",
   "control_sha": "9a4ab756620648f2f45e730591a69d224a9f495f",
@@ -85,7 +85,7 @@
     "reason": "Docker daemon unavailable on this Linux runner and no local test run was attempted within budget; hosted baseline needed to detect any reproduction."
   },
   "outcome": "blocked",
-  "updated_at": "2026-10-26T23:38:01.460054+00:00",
+  "updated_at": "2026-10-26T23:38:05.908493+00:00",
   "transitions": [
     {
       "phase": "ready",
@@ -151,6 +151,11 @@
       "phase": "publication-intent",
       "reason": "Terminal blocked decision; publication not yet confirmed.",
       "at": "2026-10-26T23:38:01.460054+00:00"
+    },
+    {
+      "phase": "terminal",
+      "reason": "Original-issue finding confirmed; terminal resume is a no-op.",
+      "at": "2026-10-26T23:38:05.908493+00:00"
     }
   ],
   "agent": {
@@ -210,5 +215,6 @@
     }
   ],
   "explanation": "Validation/remote operation blocked: Expected one unexpired artifact: flaky-evidence-windows-latest-1",
-  "analysis": null
+  "analysis": null,
+  "finding_url": "https://github.com/microsoft/aspire/issues/9672#issuecomment-6429922730"
 }
