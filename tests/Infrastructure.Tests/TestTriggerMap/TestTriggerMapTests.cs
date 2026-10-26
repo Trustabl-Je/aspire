@@ -15,6 +15,19 @@ namespace Infrastructure.Tests.TestTriggerMap;
 [Collection("GraphAffectedProjects")] // MSBuildLocator registers process-wide; keep graph use serialized.
 public sealed class TestTriggerMapTests
 {
+    [Fact]
+    public void AppHostServerV2SelectsItsBundleConsumers()
+    {
+        var result = SelectWithRealMap("src/Aspire.Hosting.Native.Server/Program.cs", "Aspire.Hosting.Native.Server");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+        Assert.Contains("job:winget-installer", result.Jobs);
+        Assert.Contains("job:homebrew-installer", result.Jobs);
+    }
+
     [Theory]
     [InlineData("eng/scripts/generate-template-cgmanifest.ps1")]
     public void TemplateManifestInputsSelectInfrastructureCoverage(string path)
@@ -107,7 +120,15 @@ public sealed class TestTriggerMapTests
         },
         {
             ".github/scripts/assert-extension-e2e-bridge-vsix.ps1",
-            ["job:extension-unit"]
+            ["job:extension-e2e"]
+        },
+        {
+            ".github/workflows/extension-unit-tests.yml",
+            ["test:Infrastructure.Tests", "job:extension-unit"]
+        },
+        {
+            ".github/workflows/extension-e2e-tests.yml",
+            ["test:Infrastructure.Tests", "job:extension-unit", "job:extension-e2e"]
         },
         {
             ".vscode/launch.json",
