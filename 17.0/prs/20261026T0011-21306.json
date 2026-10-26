@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only change",
+  "mergedAt": "2026-10-26T00:11:28Z",
+  "number": 21306,
+  "runDate": "2026-10-26T06:10:00Z",
+  "status": "excluded",
+  "title": "Remove Node dependency from guest launch lifecycle test"
+}

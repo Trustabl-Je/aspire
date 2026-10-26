@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Kubernetes hosting packages can ship stable versions",
+  "mergedAt": "2026-10-26T04:47:18Z",
+  "number": 20936,
+  "runDate": "2026-10-26T06:10:00Z",
+  "status": "included",
+  "title": "Mark Kubernetes hosting packages as stable"
+}
