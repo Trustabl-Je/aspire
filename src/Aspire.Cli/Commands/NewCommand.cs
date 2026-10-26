@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
@@ -104,6 +105,7 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(s_templateRepositoryOption);
         Options.Add(s_templateRepositoryRefOption);
         Options.Add(s_suppressAgentInitOption);
+        Options.Add(ConfigSourceService.s_useSourceOption);
         Options.Add(AgentInitCommand.s_agentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
@@ -520,6 +522,9 @@ internal sealed class NewCommand : BaseCommand
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
+        // Obtain consent and acquire the source before creating project files so acquisition
+        // failures or missing non-interactive consent do not leave a partial project.
+        var configSource = await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
         var templatePath = parseResult.GetValue(s_templatePathOption);
         var templateRepository = parseResult.GetValue(s_templateRepositoryOption);
         var templateRepositoryRef = parseResult.GetValue(s_templateRepositoryRefOption);
@@ -539,7 +544,7 @@ internal sealed class NewCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, NewCommandStrings.TemplatePathConflictingOptions);
             }
 
-            return await CreateFromSourceAsync(new TemplateSource(templatePath ?? ".", templateRepository, templateRepositoryRef), parseResult, cancellationToken);
+            return await CreateFromSourceAsync(new TemplateSource(templatePath ?? ".", templateRepository, templateRepositoryRef), configSource, parseResult, cancellationToken);
         }
 
         var source = parseResult.GetValue(s_sourceOption);
@@ -635,10 +640,10 @@ internal sealed class NewCommand : BaseCommand
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
 
-        return await CompleteTemplateAsync(templateResult, parseResult, cancellationToken);
+        return await CompleteTemplateAsync(templateResult, configSource, parseResult, cancellationToken);
     }
 
-    private async Task<CommandResult> CreateFromSourceAsync(TemplateSource source, ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<CommandResult> CreateFromSourceAsync(TemplateSource source, ConfigSource? configSource, ParseResult parseResult, CancellationToken cancellationToken)
     {
         try
         {
@@ -663,7 +668,7 @@ internal sealed class NewCommand : BaseCommand
                 Output = parseResult.GetValue(s_outputOption)
             }, parseResult, cancellationToken);
 
-            return await CompleteTemplateAsync(result, parseResult, cancellationToken);
+            return await CompleteTemplateAsync(result, configSource, parseResult, cancellationToken);
         }
         catch (TemplateDiscoveryException ex)
         {
@@ -676,7 +681,7 @@ internal sealed class NewCommand : BaseCommand
         }
     }
 
-    private async Task<CommandResult> CompleteTemplateAsync(TemplateResult templateResult, ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<CommandResult> CompleteTemplateAsync(TemplateResult templateResult, ConfigSource? configSource, ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Generated AppHosts can be run directly by dotnet, which cannot trigger lazy bundle
         // extraction. Ensure the bundle is ready instead of relying on best-effort prefetching.
@@ -686,6 +691,12 @@ internal sealed class NewCommand : BaseCommand
         }
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
+        if (templateResult.ExitCode == CliExitCodes.Success && configSource is not null)
+        {
+            // Merge source settings after successful generation so the template cannot
+            // overwrite them and failed template creation does not persist a binding.
+            await ConfigSources.MaterializeAsync(configSource, workspaceRoot, cancellationToken);
+        }
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
         // New projects get the complete default skill set, including aspireify. This chained flow
         // never registers `--mcp`, so MCP configuration is unavailable here by construction —
