@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Directory and Git template support for aspire new",
+  "mergedAt": "2026-10-26T09:17:48Z",
+  "number": 21263,
+  "runDate": "2026-10-26T13:05:00Z",
+  "status": "included",
+  "title": "Add directory and Git template engine support to aspire new"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Project-bound Git configuration sources for CLI",
+  "mergedAt": "2026-10-26T06:23:50Z",
+  "number": 20805,
+  "runDate": "2026-10-26T13:05:00Z",
+  "status": "included",
+  "title": "Implement project-bound Git configuration sources for Aspire CLI"
+}

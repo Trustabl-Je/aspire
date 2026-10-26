@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "`aspire new --template-path` loads unpacked .NET templates from a local directory, or from a Git repository with `--template-repository` and `--template-repository-ref`, without publishing a package or requiring the .NET SDK.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udcc1",
+  "firstMergedAt": "2026-10-26T09:17:48Z",
+  "lastMergedAt": "2026-10-26T09:17:48Z",
+  "name": "Directory and Git templates for aspire new",
+  "owner": "mitchdenny",
+  "prs": [
+    21263
+  ]
+}
