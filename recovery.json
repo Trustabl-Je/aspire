@@ -19,6 +19,6 @@
   },
   "pending_dispatch": null,
   "cancellations": {},
-  "status": "active",
+  "status": "terminal",
   "last_resume_checkpoint": "e33d35eea2445dbe9e7ee5e5722fd7f18a69ad3d"
 }
