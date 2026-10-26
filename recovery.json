@@ -8,8 +8,8 @@
     "control_branch": "ankj/flaky-investigation-control-e57778c84e8f"
   },
   "deadline": 1793096586.019694,
-  "outer": 40411973673,
-  "resumes": 0,
+  "outer": 40421040017,
+  "resumes": 1,
   "children": {
     "40414430678": {
       "sha": "e57778c84e8f0bce064ff4b9abe7b4bcf6af2a5c",
@@ -17,10 +17,8 @@
       "deadline": 1793059022.0
     }
   },
-  "pending_dispatch": {
-    "checkpoint": "e33d35eea2445dbe9e7ee5e5722fd7f18a69ad3d",
-    "at": 1793057858.8127875
-  },
+  "pending_dispatch": null,
   "cancellations": {},
-  "status": "active"
+  "status": "active",
+  "last_resume_checkpoint": "e33d35eea2445dbe9e7ee5e5722fd7f18a69ad3d"
 }
