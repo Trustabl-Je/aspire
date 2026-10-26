@@ -124,9 +124,9 @@ Source origin: {3}</target>
         <note>Do not translate "configSource".</note>
       </trans-unit>
       <trans-unit id="NoBinding">
-        <source>The selected project has no saved configSource in aspire.config.json. Enable a source with aspire new or aspire init before refreshing it.</source>
-        <target state="new">The selected project has no saved configSource in aspire.config.json. Enable a source with aspire new or aspire init before refreshing it.</target>
-        <note>Do not translate "configSource", "aspire.config.json", "aspire new", or "aspire init".</note>
+        <source>Neither the nearest local settings file nor the global settings file has a saved configSource. Enable a source with aspire new or aspire init before refreshing it.</source>
+        <target state="new">Neither the nearest local settings file nor the global settings file has a saved configSource. Enable a source with aspire new or aspire init before refreshing it.</target>
+        <note>Do not translate "configSource", "aspire new", or "aspire init".</note>
       </trans-unit>
       <trans-unit id="NoCandidate">
         <source>No configuration source is available. Set {0} to a Git repository address.</source>
@@ -134,8 +134,8 @@ Source origin: {3}</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
       <trans-unit id="RefreshOptionDescription">
-        <source>Apply allowed settings from the project's saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</source>
-        <target state="new">Apply allowed settings from the project's saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</target>
+        <source>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</source>
+        <target state="new">Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="Refreshed">

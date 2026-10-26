@@ -127,6 +127,8 @@ internal sealed class UpdateCommand : BaseCommand
             Hidden = true
         };
         Options.Add(_qualityOption);
+        // Config-source refresh bypasses package and CLI updates. Reject their options
+        // rather than silently ignoring them in the config-only execution path.
         Validators.Add(result =>
         {
             if (result.GetValue(s_configSourceOption) &&
@@ -184,7 +186,7 @@ internal sealed class UpdateCommand : BaseCommand
             return configuredFile.Directory!;
         }
         // Explicit directory targets must discover their AppHost first. Config-only
-        // refresh can use bindings in this directory and its ancestors.
+        // refresh can use the nearest local configuration and global configuration.
         try
         {
             var selectedFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(configuredFile, createSettingsFile: false, cancellationToken);

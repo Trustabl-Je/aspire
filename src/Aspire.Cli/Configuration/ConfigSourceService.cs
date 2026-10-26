@@ -19,6 +19,7 @@ namespace Aspire.Cli.Configuration;
 
 internal sealed class ConfigSourceService(
     CliExecutionContext executionContext,
+    IConfigurationService configurationService,
     IEnvironment environment,
     IInternalMicrosoftDetector detector,
     IConfigSourceGitClient git,
@@ -45,7 +46,7 @@ internal sealed class ConfigSourceService(
     };
 
     /// <summary>
-    /// Checks saved configuration sources in the resolved project directory and its ancestors without applying changes.
+    /// Checks saved sources in the nearest local and global configuration files without applying changes.
     /// Runs in the background and defers advisory messages until command exit.
     /// </summary>
     /// <param name="projectDirectory">The directory of the project already resolved by the caller.</param>
@@ -56,6 +57,9 @@ internal sealed class ConfigSourceService(
         lock (_checksLock)
         {
             EnsureSameProject(projectDirectory);
+            // Project selection can reach this through multiple paths. Schedule at most one
+            // advisory task per command, even after it completes. `update --config-source`
+            // performs its own forced refresh and must not start a competing advisory check.
             if (_check is not null || _stopping.IsCancellationRequested || executionContext.Command is UpdateCommand { IsConfigSourceRefresh: true })
             {
                 return;
@@ -196,7 +200,7 @@ internal sealed class ConfigSourceService(
         EnsureSameProject(projectDirectory);
         var path = Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
         var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
-        if (configuration is not null && TryGetValue(configuration, ["configSource"], out _))
+        if (configuration is not null && TryGetValue(configuration, [ConfigSource.SectionName], out _))
         {
             CheckForConfigSourceUpdates(projectDirectory, cancellationToken);
             return null;
@@ -209,12 +213,11 @@ internal sealed class ConfigSourceService(
     {
         EnsureSameProject(projectDirectory);
         var snapshot = await AcquireAsync(source, force: false, cancellationToken);
-        await ApplySnapshotAsync(source, snapshot, projectDirectory, cancellationToken);
+        await ApplySnapshotAsync(source, snapshot, Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName), cancellationToken);
     }
 
-    private async Task ApplySnapshotAsync(ConfigSource source, ConfigSourceSnapshot snapshot, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
+    private async Task ApplySnapshotAsync(ConfigSource source, ConfigSourceSnapshot snapshot, string path, CancellationToken cancellationToken)
     {
-        var path = Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
             executionContext, new FileInfo(path), logger, cancellationToken)
             ?? throw new ConfigSourceException(ConfigSourceStrings.ConfigLockFailed);
@@ -244,7 +247,7 @@ internal sealed class ConfigSourceService(
             Ref = source.Ref,
             AppliedVersion = snapshot.Metadata.Version
         };
-        configuration[GetKey(configuration, "configSource")] = JsonSerializer.SerializeToNode(binding, JsonSourceGenerationContext.Default.ConfigSource);
+        configuration[GetKey(configuration, ConfigSource.SectionName)] = JsonSerializer.SerializeToNode(binding, JsonSourceGenerationContext.Default.ConfigSource);
         var changed = previous != configuration.ToJsonString();
         if (changed)
         {
@@ -281,12 +284,16 @@ internal sealed class ConfigSourceService(
             var foundBinding = false;
             var refreshedSources = new HashSet<ConfigSourceIdentity>();
             var sources = new List<ConfigSource>();
-            // Walk nearest-first and await each source: Git can share the terminal and
-            // request input, so distinct sources must not fetch or prompt in parallel.
-            for (DirectoryInfo? current = directory; current is not null; current = current.Parent)
+            var configPaths = new[]
+            {
+                ConfigurationHelper.FindNearestConfigFilePath(directory),
+                configurationService.GetSettingsFilePath(isGlobal: true)
+            }.OfType<string>().Distinct(StringComparers.FileSystemPath);
+            // Use the same local/global files as settings lookup, even if the nearest
+            // file has no binding. Await each source so Git terminal input cannot compete.
+            foreach (var configPath in configPaths)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var configPath = Path.Combine(current.FullName, AspireConfigFile.FileName);
                 var source = await ReadBindingAsync(configPath, cancellationToken);
                 if (source is null)
                 {
@@ -297,7 +304,7 @@ internal sealed class ConfigSourceService(
                 if (force)
                 {
                     var snapshot = await AcquireAsync(source, force: refreshedSources.Add(identity), cancellationToken);
-                    await ApplySnapshotAsync(source, snapshot, current, cancellationToken);
+                    await ApplySnapshotAsync(source, snapshot, configPath, cancellationToken);
                 }
                 else
                 {
@@ -366,7 +373,7 @@ internal sealed class ConfigSourceService(
         {
             return null;
         }
-        var sourceProperty = config.FirstOrDefault(p => p.Key.Equals("configSource", StringComparison.OrdinalIgnoreCase));
+        var sourceProperty = config.FirstOrDefault(p => p.Key.Equals(ConfigSource.SectionName, StringComparison.OrdinalIgnoreCase));
         if (sourceProperty.Key is null)
         {
             return null;

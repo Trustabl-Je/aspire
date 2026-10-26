@@ -442,7 +442,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UpdateConfigSource_ExplicitAppHostRefreshesProjectAndAncestorBindings()
+    public async Task UpdateConfigSource_ExplicitAppHostRefreshesNearestBindingOnly()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var project = workspace.CreateDirectory("selected-project");
@@ -458,11 +458,10 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"update --config-source --apphost \"{Path.Combine(project.FullName, "apphost.cs")}\" --yes --non-interactive");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(2, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
+        Assert.Equal(1, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
         Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
-        var expectedParent = JsonNode.Parse(parentConfiguration)!;
-        expectedParent["configSource"]!["appliedVersion"] = "version-1";
-        Assert.True(JsonNode.DeepEquals(expectedParent, JsonNode.Parse(await File.ReadAllTextAsync(parentPath))));
+        Assert.Equal(parentConfiguration, await File.ReadAllTextAsync(parentPath));
+        Assert.Equal("version-1", AspireConfigFile.Load(project.FullName)!.ConfigSource!.AppliedVersion);
     }
 
     [Fact]
@@ -478,11 +477,39 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateConfigSource_RefreshesGlobalBindingWhenNearestConfigurationHasNone(bool explicitAppHost)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var localPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(localPath, "{}");
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var globalFile = new FileInfo(provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true));
+        globalFile.Directory!.Create();
+        await TestConfigSourceServices.SaveBindingAsync(s_source, globalFile.Directory, CancellationToken.None);
+        File.Move(Path.Combine(globalFile.Directory.FullName, AspireConfigFile.FileName), globalFile.FullName);
+        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        git.Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject()));
+        var appHostArgument = explicitAppHost ? $" --apphost \"{Path.Combine(workspace.Path, "apphost.cs")}\"" : "";
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"update --config-source{appHostArgument} --yes --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+
+        Assert.Equal(1, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+        Assert.Equal("{}", await File.ReadAllTextAsync(localPath));
+        var globalConfiguration = JsonNode.Parse(await File.ReadAllTextAsync(globalFile.FullName))!;
+        Assert.Equal("version-2", globalConfiguration["configSource"]!["appliedVersion"]!.GetValue<string>());
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task UpdateConfigSource_RefreshesConfiguredProjectAndAncestors(bool bound, bool childConfigExists)
+    public async Task UpdateConfigSource_RefreshesNearestConfigurationForConfiguredProject(bool bound, bool childConfigExists)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
@@ -514,9 +541,10 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         };
         var result = provider.GetRequiredService<RootCommand>().Parse("update --config-source --yes --non-interactive");
 
-        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(bound ? 2 : 1, git.Calls);
-        Assert.Equal("version-1", AspireConfigFile.Load(workspace.Path)!.ConfigSource!.AppliedVersion);
+        var hasBinding = bound || !childConfigExists;
+        Assert.Equal(hasBinding ? CliExitCodes.Success : CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(hasBinding ? 1 : 0, git.Calls);
+        Assert.Equal(bound || childConfigExists ? s_source.AppliedVersion : "version-1", AspireConfigFile.Load(workspace.Path)!.ConfigSource!.AppliedVersion);
         Assert.Equal(bound, AspireConfigFile.Load(selected.FullName)?.ConfigSource is not null);
     }
 
@@ -576,7 +604,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
         git.Check = (source, _) =>
         {
-            Assert.True(ConfigSource.HasSameIdentity(selectedSource, source) || ConfigSource.HasSameIdentity(s_source, source));
+            Assert.True(ConfigSource.HasSameIdentity(selectedSource, source));
             Assert.Null(source.AppliedVersion);
             return Task.FromResult(("commit-1", "version-1"));
         };
@@ -585,7 +613,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         await provider.GetRequiredService<ConfigSourceService>().WaitForChecksAsync().DefaultTimeout();
 
         Assert.Equal(projectFile.FullName, project?.FullName);
-        Assert.Equal(2, git.CheckCalls);
+        Assert.Equal(1, git.CheckCalls);
         Assert.Equal(0, git.Calls);
     }
 
@@ -632,27 +660,25 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
         git.Acquire = (source, _) =>
         {
-            Assert.True(ConfigSource.HasSameIdentity(selectedSource, source) || ConfigSource.HasSameIdentity(s_source, source));
+            Assert.True(ConfigSource.HasSameIdentity(selectedSource, source));
             return Task.FromResult(("commit-2", "version-2", new JsonObject()));
         };
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"update --config-source --apphost \"{requestedDirectory.FullName}\" --yes --non-interactive");
 
-        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(bound ? CliExitCodes.Success : CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
 
-        Assert.Equal(bound ? 2 : 1, git.Calls);
+        Assert.Equal(bound ? 1 : 0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
         Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
-        var expectedParent = JsonNode.Parse(parentConfiguration)!;
-        expectedParent["configSource"]!["appliedVersion"] = "version-2";
-        Assert.True(JsonNode.DeepEquals(expectedParent, JsonNode.Parse(await File.ReadAllTextAsync(parentPath))));
+        Assert.Equal(parentConfiguration, await File.ReadAllTextAsync(parentPath));
         if (bound)
         {
             Assert.Equal("version-2", AspireConfigFile.Load(projectDirectory.FullName)!.ConfigSource!.AppliedVersion);
         }
         else
         {
-            Assert.Empty(interaction.DisplayedErrors);
+            Assert.Equal(ConfigSourceStrings.NoBinding, Assert.Single(interaction.DisplayedErrors));
             Assert.Equal(originalConfiguration, await File.ReadAllTextAsync(selectedPath));
         }
     }

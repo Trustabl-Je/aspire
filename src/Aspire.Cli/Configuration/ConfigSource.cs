@@ -9,6 +9,8 @@ namespace Aspire.Cli.Configuration;
 
 internal sealed class ConfigSource
 {
+    public const string SectionName = "configSource";
+
     // General configuration loading must tolerate incomplete advisory bindings.
     // Validate rejects missing values before a source operation uses them.
     [JsonPropertyName("repository")]

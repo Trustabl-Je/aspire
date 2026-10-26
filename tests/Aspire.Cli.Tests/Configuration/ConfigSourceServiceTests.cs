@@ -23,6 +23,137 @@ namespace Aspire.Cli.Tests.Configuration;
 public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    public async Task CheckProject_ChecksGlobalSourceWithoutSearchingPastNearestConfiguration(bool force, bool legacy, bool localFileExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var project = workspace.CreateDirectory("project");
+        var global = workspace.CreateDirectory("global");
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, global, CancellationToken.None);
+        var globalFile = new FileInfo(Path.Combine(global.FullName, "custom-global.json"));
+        File.Move(Path.Combine(global.FullName, AspireConfigFile.FileName), globalFile.FullName);
+        var originalGlobal = await File.ReadAllTextAsync(globalFile.FullName);
+        var localPath = legacy
+            ? Path.Combine(project.CreateSubdirectory(".aspire").FullName, "settings.json")
+            : Path.Combine(project.FullName, AspireConfigFile.FileName);
+        const string localConfiguration = """{"custom":"keep"}""";
+        string? originalParent = null;
+        var parentPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        if (localFileExists)
+        {
+            await File.WriteAllTextAsync(localPath, localConfiguration);
+            await TestConfigSourceServices.SaveBindingAsync(new ConfigSource
+            {
+                Repository = s_appliedSource.Repository,
+                Path = "ignored-parent.json",
+                AppliedVersion = "ignored-version"
+            }, workspace.WorkspaceRoot, CancellationToken.None);
+            originalParent = await File.ReadAllTextAsync(parentPath);
+        }
+        var git = new TestConfigSourceGitClient
+        {
+            Acquire = (source, _) =>
+            {
+                Assert.True(ConfigSource.HasSameIdentity(s_appliedSource, source));
+                return Task.FromResult(("commit-2", "version-2", new JsonObject()));
+            },
+            Check = (source, _) =>
+            {
+                Assert.True(ConfigSource.HasSameIdentity(s_appliedSource, source));
+                return Task.FromResult(("commit-2", "version-2"));
+            }
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, globalSettingsFile: globalFile);
+
+        await service.CheckProjectAsync(project, force, CancellationToken.None);
+
+        Assert.Equal(force ? 1 : 0, git.Calls);
+        Assert.Equal(force ? 0 : 1, git.CheckCalls);
+        var actualGlobal = await File.ReadAllTextAsync(globalFile.FullName);
+        if (force)
+        {
+            Assert.Equal("version-2", JsonNode.Parse(actualGlobal)!["configSource"]!["appliedVersion"]!.GetValue<string>());
+        }
+        else
+        {
+            Assert.Equal(originalGlobal, actualGlobal);
+        }
+        Assert.False(File.Exists(Path.Combine(global.FullName, AspireConfigFile.FileName)));
+        if (localFileExists)
+        {
+            Assert.Equal(localConfiguration, await File.ReadAllTextAsync(localPath));
+            Assert.Equal(originalParent, await File.ReadAllTextAsync(parentPath));
+        }
+        else
+        {
+            Assert.False(File.Exists(localPath));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CheckProject_LocalAndGlobalSameFileIsProcessedOnce(bool force)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
+        var globalFile = new FileInfo(Path.Combine(workspace.Path, AspireConfigFile.FileName));
+        var git = new TestConfigSourceGitClient
+        {
+            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject())),
+            Check = (_, _) => Task.FromResult(("commit-2", "version-2"))
+        };
+        var interaction = new TestInteractionService();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction, globalSettingsFile: globalFile);
+
+        await service.CheckProjectAsync(workspace.WorkspaceRoot, force, CancellationToken.None);
+        service.NotifyIfUpdateAvailable();
+
+        Assert.Equal(force ? 1 : 0, git.Calls);
+        Assert.Equal(force ? 0 : 1, git.CheckCalls);
+        Assert.Single(interaction.DisplayedMessages);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CheckProject_UsesNearestLegacyConfigurationWithoutCreatingModernFile(bool force)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
+        var modernPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var legacyPath = Path.Combine(workspace.CreateDirectory(".aspire").FullName, "settings.json");
+        File.Move(modernPath, legacyPath, overwrite: true);
+        var original = await File.ReadAllTextAsync(legacyPath);
+        var git = new TestConfigSourceGitClient
+        {
+            Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject())),
+            Check = (_, _) => Task.FromResult(("commit-2", "version-2"))
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
+
+        await service.CheckProjectAsync(workspace.WorkspaceRoot, force, CancellationToken.None);
+
+        Assert.Equal(force ? 1 : 0, git.Calls);
+        Assert.Equal(force ? 0 : 1, git.CheckCalls);
+        Assert.False(File.Exists(modernPath));
+        var actual = await File.ReadAllTextAsync(legacyPath);
+        if (force)
+        {
+            Assert.Equal("version-2", JsonNode.Parse(actual)!["configSource"]!["appliedVersion"]!.GetValue<string>());
+        }
+        else
+        {
+            Assert.Equal(original, actual);
+        }
+    }
+
+    [Theory]
     [InlineData(false, "same")]
     [InlineData(false, "repository")]
     [InlineData(false, "path")]
@@ -31,7 +162,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     [InlineData(true, "repository")]
     [InlineData(true, "path")]
     [InlineData(true, "ref")]
-    public async Task CheckProject_AncestorSourcesAreSerialAndDeduplicated(bool force, string difference)
+    public async Task CheckProject_LocalAndGlobalSourcesAreSerialAndDeduplicated(bool force, string difference)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var gap = workspace.CreateDirectory("gap");
@@ -39,21 +170,25 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         parent.CreateSubdirectory(".git");
         var project = parent.CreateSubdirectory("project");
         var sibling = parent.CreateSubdirectory("sibling");
-        var parentSource = new ConfigSource
+        var global = workspace.CreateDirectory("global");
+        var globalFile = new FileInfo(Path.Combine(global.FullName, AspireConfigFile.FileName));
+        var globalSource = new ConfigSource
         {
             Repository = difference == "repository" ? "https://other.example/config" : s_appliedSource.Repository,
             Path = difference == "path" ? "other.json" : s_appliedSource.Path,
             Ref = difference == "ref" ? "other" : s_appliedSource.Ref,
-            AppliedVersion = "parent-version"
+            AppliedVersion = "global-version"
         };
+        var ignoredSource = new ConfigSource { Repository = s_appliedSource.Repository, Path = "ignored.json", AppliedVersion = "ignored-version" };
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, project, CancellationToken.None);
-        await TestConfigSourceServices.SaveBindingAsync(parentSource, parent, CancellationToken.None);
-        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
-        await TestConfigSourceServices.SaveBindingAsync(parentSource, sibling, CancellationToken.None);
+        await TestConfigSourceServices.SaveBindingAsync(globalSource, global, CancellationToken.None);
+        await TestConfigSourceServices.SaveBindingAsync(ignoredSource, parent, CancellationToken.None);
+        await TestConfigSourceServices.SaveBindingAsync(ignoredSource, workspace.WorkspaceRoot, CancellationToken.None);
+        await TestConfigSourceServices.SaveBindingAsync(ignoredSource, sibling, CancellationToken.None);
         var siblingPath = Path.Combine(sibling.FullName, AspireConfigFile.FileName);
         var siblingConfiguration = await File.ReadAllTextAsync(siblingPath);
         var originals = new Dictionary<string, string>();
-        foreach (var directory in new[] { project, parent, workspace.WorkspaceRoot })
+        foreach (var directory in new[] { project, global, parent, workspace.WorkspaceRoot })
         {
             var path = Path.Combine(directory.FullName, AspireConfigFile.FileName);
             await ConfigurationService.SetConfigurationInFileAsync(path, "docs.custom", directory.Name);
@@ -95,7 +230,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             }
         };
         var interaction = new TestInteractionService();
-        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction);
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction, globalSettingsFile: globalFile);
 
         var pending = service.CheckProjectAsync(project, force, CancellationToken.None);
         await started.Task.DefaultTimeout();
@@ -111,15 +246,15 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await pending.DefaultTimeout();
         service.NotifyIfUpdateAvailable();
 
-        var expectedSources = difference == "same" ? new[] { s_appliedSource } : new[] { s_appliedSource, parentSource };
+        var expectedSources = difference == "same" ? new[] { s_appliedSource } : new[] { s_appliedSource, globalSource };
         Assert.Equal(expectedSources.Length, operations.Count);
         Assert.True(expectedSources.Zip(operations).All(pair => ConfigSource.HasSameIdentity(pair.First, pair.Second)));
         Assert.Equal(force ? expectedSources.Length : 0, git.Calls);
         Assert.Equal(force ? 0 : expectedSources.Length, git.CheckCalls);
-        foreach (var directory in new[] { project, parent, workspace.WorkspaceRoot })
+        foreach (var directory in new[] { project, global, parent, workspace.WorkspaceRoot })
         {
             var path = Path.Combine(directory.FullName, AspireConfigFile.FileName);
-            if (force)
+            if (force && (directory == project || directory == global))
             {
                 var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
                 Assert.Equal("version-2", configuration["configSource"]!["appliedVersion"]!.GetValue<string>());
@@ -144,13 +279,15 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task CheckProject_AncestorFailureStopsLaterSourcesAndPreservesEarlierUpdates(bool force, bool cancel)
+    public async Task CheckProject_GlobalFailurePreservesEarlierLocalUpdates(bool force, bool cancel)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellation = new CancellationTokenSource();
         var parent = workspace.CreateDirectory("parent");
         var project = parent.CreateSubdirectory("project");
-        foreach (var directory in new[] { project, parent, workspace.WorkspaceRoot })
+        var global = workspace.CreateDirectory("global");
+        var globalFile = new FileInfo(Path.Combine(global.FullName, AspireConfigFile.FileName));
+        foreach (var directory in new[] { project, global, parent, workspace.WorkspaceRoot })
         {
             await TestConfigSourceServices.SaveBindingAsync(new ConfigSource
             {
@@ -159,6 +296,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 AppliedVersion = "version-1"
             }, directory, CancellationToken.None);
         }
+        var originalGlobal = await File.ReadAllTextAsync(globalFile.FullName);
         var parentPath = Path.Combine(parent.FullName, AspireConfigFile.FileName);
         var rootPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var originalParent = await File.ReadAllTextAsync(parentPath);
@@ -167,7 +305,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         void Record(ConfigSource source)
         {
             operations.Enqueue(source.Path);
-            if (source.Path == "parent.json")
+            if (source.Path == "global.json")
             {
                 if (cancel)
                 {
@@ -191,7 +329,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             }
         };
         var interaction = new TestInteractionService();
-        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction);
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction, globalSettingsFile: globalFile);
 
         if (cancel)
         {
@@ -211,8 +349,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 message => Assert.Contains("Source unavailable", message.Message));
         }
 
-        Assert.Equal(["project.json", "parent.json"], operations);
+        Assert.Equal(["project.json", "global.json"], operations);
         Assert.Equal(force ? "version-2" : "version-1", AspireConfigFile.Load(project.FullName)!.ConfigSource!.AppliedVersion);
+        Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalFile.FullName));
         Assert.Equal(originalParent, await File.ReadAllTextAsync(parentPath));
         Assert.Equal(originalRoot, await File.ReadAllTextAsync(rootPath));
     }
@@ -225,11 +364,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var project = workspace.CreateDirectory("project");
+        var global = workspace.CreateDirectory("global");
+        var globalFile = new FileInfo(Path.Combine(global.FullName, AspireConfigFile.FileName));
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, project, CancellationToken.None);
         var git = new TestConfigSourceGitClient();
         var context = workspace.CreateExecutionContext();
         var clock = new AdjustableTimeProvider();
-        using (var first = TestConfigSourceServices.Create(context, git: git, clock: clock))
+        using (var first = TestConfigSourceServices.Create(context, git: git, clock: clock, globalSettingsFile: globalFile))
         {
             await first.CheckProjectAsync(project, force: false, CancellationToken.None);
         }
@@ -239,10 +380,10 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             Path = s_appliedSource.Path,
             Ref = s_appliedSource.Ref,
             AppliedVersion = "version-2"
-        }, workspace.WorkspaceRoot, CancellationToken.None);
+        }, global, CancellationToken.None);
         git.Check = (_, _) => Task.FromResult(("commit-3", "version-3"));
         var interaction = new TestInteractionService();
-        using (var service = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction))
+        using (var service = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction, globalSettingsFile: globalFile))
         {
             await service.CheckProjectAsync(project, force: false, CancellationToken.None);
             service.NotifyIfUpdateAvailable();
@@ -253,7 +394,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
         clock.UtcNow += TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes);
         interaction = new TestInteractionService();
-        using var next = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction);
+        using var next = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction, globalSettingsFile: globalFile);
 
         await next.CheckProjectAsync(project, force: false, CancellationToken.None);
         next.NotifyIfUpdateAvailable();
@@ -344,6 +485,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Same(check, service.WaitForChecksAsync());
         await check.DefaultTimeout();
 
+        service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, CancellationToken.None);
+        Assert.Same(check, service.WaitForChecksAsync());
         Assert.Equal(1, git.CheckCalls);
     }
 

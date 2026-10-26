@@ -323,7 +323,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The selected project has no saved configSource in aspire.config.json. Enable a source with aspire new or aspire init before refreshing it..
+        ///   Looks up a localized string similar to Neither the nearest local settings file nor the global settings file has a saved configSource. Enable a source with aspire new or aspire init before refreshing it..
         /// </summary>
         internal static string NoBinding
         {
@@ -367,7 +367,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Apply allowed settings from the project&apos;s saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI..
+        ///   Looks up a localized string similar to Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI..
         /// </summary>
         internal static string RefreshOptionDescription
         {

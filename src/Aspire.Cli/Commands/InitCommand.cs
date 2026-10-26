@@ -162,6 +162,8 @@ internal sealed class InitCommand : BaseCommand
 
         if (configSource is not null)
         {
+            // Apply the source after scaffolding so it merges with the generated configuration
+            // and a failed skeleton drop does not persist a new binding.
             await ConfigSources.MaterializeAsync(configSource, configurationDirectory, cancellationToken);
         }
 

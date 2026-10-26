@@ -64,7 +64,7 @@
     <value>Accept or decline the proposed Git configuration source for this project.</value>
   </data>
   <data name="RefreshOptionDescription" xml:space="preserve">
-    <value>Apply allowed settings from the project's saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</value>
+    <value>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</value>
   </data>
   <data name="InvalidRepository" xml:space="preserve">
     <value>The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</value>
@@ -129,8 +129,8 @@ Source origin: {3}</value>
     <comment>Do not translate "--use-config-source", "true", or "false".</comment>
   </data>
   <data name="NoBinding" xml:space="preserve">
-    <value>The selected project has no saved configSource in aspire.config.json. Enable a source with aspire new or aspire init before refreshing it.</value>
-    <comment>Do not translate "configSource", "aspire.config.json", "aspire new", or "aspire init".</comment>
+    <value>Neither the nearest local settings file nor the global settings file has a saved configSource. Enable a source with aspire new or aspire init before refreshing it.</value>
+    <comment>Do not translate "configSource", "aspire new", or "aspire init".</comment>
   </data>
   <data name="InvalidBinding" xml:space="preserve">
     <value>The project's configSource must contain a Git repository address and a repository-relative configuration file path.</value>

@@ -504,6 +504,8 @@ internal sealed class NewCommand : BaseCommand
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
+        // Obtain consent and acquire the source before creating project files so acquisition
+        // failures or missing non-interactive consent do not leave a partial project.
         var configSource = await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
         var source = parseResult.GetValue(s_sourceOption);
         if (!string.IsNullOrWhiteSpace(source) && PackageSourceOverrideMappings.HasCredentialMaterial(source))
@@ -608,6 +610,8 @@ internal sealed class NewCommand : BaseCommand
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
         if (templateResult.ExitCode == CliExitCodes.Success && configSource is not null)
         {
+            // Merge source settings after successful generation so the template cannot
+            // overwrite them and failed template creation does not persist a binding.
             await ConfigSources.MaterializeAsync(configSource, workspaceRoot, cancellationToken);
         }
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);

@@ -21,10 +21,12 @@ internal interface IConfigSourceGitClient
 
 internal sealed class ConfigSourceGitClient(ICliHostEnvironment hostEnvironment) : IConfigSourceGitClient
 {
+    private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
+
     public async Task<(string Commit, string Version, JsonObject Configuration)> AcquireAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        timeout.CancelAfter(s_gitTimeout);
         try
         {
             var (repositoryDirectory, commit, version) = await FetchVersionAsync(source, directory, allowInteractive: true, timeout.Token);
@@ -41,9 +43,9 @@ internal sealed class ConfigSourceGitClient(ICliHostEnvironment hostEnvironment)
                     ?? throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration);
                 // Validate the known settings as well as JSON syntax. Unknown content settings
                 // are retained for future schemas, but a source cannot enable another source.
-                if (configuration.Any(p => p.Key.Equals("configSource", StringComparison.OrdinalIgnoreCase)
-                    || p.Key.StartsWith("configSource:", StringComparison.OrdinalIgnoreCase)
-                    || p.Key.StartsWith("configSource.", StringComparison.OrdinalIgnoreCase)))
+                if (configuration.Any(p => p.Key.Equals(ConfigSource.SectionName, StringComparison.OrdinalIgnoreCase)
+                    || p.Key.StartsWith(ConfigSource.SectionName + ":", StringComparison.OrdinalIgnoreCase)
+                    || p.Key.StartsWith(ConfigSource.SectionName + ".", StringComparison.OrdinalIgnoreCase)))
                 {
                     throw new ConfigSourceException(ConfigSourceStrings.NestedSource);
                 }
@@ -73,7 +75,7 @@ internal sealed class ConfigSourceGitClient(ICliHostEnvironment hostEnvironment)
     public async Task<(string Commit, string Version)> CheckAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        timeout.CancelAfter(s_gitTimeout);
         try
         {
             var (_, commit, version) = await FetchVersionAsync(source, directory, allowInteractive: false, timeout.Token);
