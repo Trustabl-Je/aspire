@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "issue_url": "https://github.com/microsoft/aspire/issues/8728",
+  "state_revision": "cca563fe4441bc9ba3359386c94b3e0a43c57e60",
+  "action": "finish",
+  "outcome": "not-reproduced",
+  "explanation": "Three clean baseline rounds (single, single, quarantined-project contention) on ubuntu-latest: 27 runner-iterations, 0 failures; target passed in every iteration (9+9+9). Failure not reproduced; no root cause established, so no fix proposed.",
+  "analysis": {
+    "why_no_fix": "ProxylessEndpointWorks passed in all 27 hosted iterations including project-contention mode; the reported 'No exception was thrown' failure was not reproduced and no root cause was established.",
+    "attempted": [
+      "Read the issue, test source at base SHA and context checkpoint.",
+      "Reviewed TRX from three hosted rounds (single x2, project contention): 0 failures.",
+      "Local precheck skipped (solution not built); relied on hosted reproduction."
+    ],
+    "next_action": "Keep the test quarantined; a maintainer could investigate whether a leftover ServiceA process holds port 5156 in the original failing environment."
+  },
+  "evidence_read": [
+    "/tmp/gh-aw/flaky-investigation/source/.agents/skills/fix-flaky-test/SKILL.md: 'Do NOT skip ahead to writing a code fix'",
+    "/tmp/gh-aw/flaky-investigation/context.json: history shows passed 9/9/9, failed 0/0/0",
+    "/tmp/gh-aw/flaky-investigation/evidence/40405798259/ubuntu-latest/1/iteration-1/Aspire.Hosting.Tests_net10.0_x64.trx: ProxylessEndpointWorks outcome=Passed"
+  ]
+}
