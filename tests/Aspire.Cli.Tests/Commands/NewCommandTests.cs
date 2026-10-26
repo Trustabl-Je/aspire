@@ -2497,9 +2497,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(capturedOutputPath);
         Assert.Contains("my-project", capturedOutputPath);
 
-        // Agent init runs by default after project creation
-        var skillPath = Path.Combine(capturedOutputPath, ".agents", "skills", "aspire", "SKILL.md");
-        Assert.True(File.Exists(skillPath));
+        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+            [Path.Combine(capturedOutputPath, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+        Assert.False(Directory.Exists(Path.Combine(capturedOutputPath, ".agents", "skills")));
     }
 
     [Fact]
@@ -3263,7 +3263,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandAgentInit_IncludesAspireifyAndDoesNotOfferMcpServer()
+    public async Task NewCommandAgentInit_RegistersRemoteAssetsAndDoesNotOfferMcpServer()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService
@@ -3297,14 +3297,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [SharedCommandStrings.PromptRunAgentInit],
             interactionService.BooleanPromptCalls.Select(call => call.PromptText));
-        var aspireifySkillPath = Path.Combine(
-            workspace.WorkspaceRoot.FullName,
-            "output",
-            ".agents",
-            "skills",
-            CommonAgentApplicators.AspireifySkillName,
-            "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath));
+        var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+            [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+        Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
 
     [Fact]
@@ -3355,11 +3351,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Agent init should have run — default skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-        Assert.True(File.Exists(skillPath));
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath));
+        var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+            [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+        Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
 
     [Fact]
@@ -3384,11 +3379,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Default is to run agent init
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
-        Assert.True(File.Exists(skillPath));
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath));
+        var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+            [Path.Combine(outputDirectory, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+        Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));
     }
 
     [Fact]

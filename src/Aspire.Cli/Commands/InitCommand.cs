@@ -197,9 +197,8 @@ internal sealed class InitCommand : BaseCommand
         // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
-        // (which includes aspireify as the natural follow-up wiring skill). This chained flow
-        // never registers `--mcp`, so MCP configuration is unavailable here by construction —
+        // aspire init creates an AppHost in an existing repo, so pre-select Aspire agent assets.
+        // This chained flow never registers `--mcp`, so MCP configuration is unavailable here by construction —
         // it remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
@@ -208,7 +207,7 @@ internal sealed class InitCommand : BaseCommand
             agentInitBinding,
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
-            PromptBinding.Create(parseResult, AgentInitCommand.s_aspireSourceOption, "embedded"),
+            PromptBinding.Create(parseResult, AgentInitCommand.s_aspireSourceOption, AgentInitCommand.DefaultAspireSource),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 

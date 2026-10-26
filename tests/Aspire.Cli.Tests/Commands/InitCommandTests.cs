@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
@@ -109,7 +110,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_WhenSolutionExists_InstallsProjectSkillsInWorkspaceWithoutCheckingWorkspaceSource()
+    public async Task InitCommand_WhenSolutionExists_RegistersRemoteAssetsInWorkspaceWithoutCheckingWorkspaceSource()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Test.sln"), "Fake solution file");
@@ -132,7 +133,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
 
         Assert.True(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
-        Assert.True(File.Exists(Path.Combine(workspace.Path, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md")));
+        Assert.True(await AspireSkillsRemoteConfiguration.HasPluginRegistrationAsync(
+            [Path.Combine(workspace.Path, ".github", "copilot", "settings.json")], TestContext.Current.CancellationToken));
+        Assert.False(Directory.Exists(Path.Combine(workspace.Path, ".agents", "skills")));
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
         var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
         Assert.Equal(0, git.Calls);
@@ -700,7 +703,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        var parseResult = initCommand.Parse("init --language typescript");
+        var parseResult = initCommand.Parse("init --language typescript --aspire-source embedded");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);

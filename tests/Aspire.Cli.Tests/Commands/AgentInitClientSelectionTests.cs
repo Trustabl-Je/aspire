@@ -468,7 +468,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 {
                     Assert.Equal([string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_PluginRiskWarning,
                         AspireSkillsRemoteConfiguration.RepositoryUrl)], riskWarnings);
-                    Assert.Equal(["embedded", "remote"], choices.Cast<string>());
+                    Assert.Equal(["remote", "embedded"], choices.Cast<string>());
                     return "embedded";
                 }
                 Assert.Equal([AgentConfigurationScope.Project, AgentConfigurationScope.Global], choices.Cast<AgentConfigurationScope>());

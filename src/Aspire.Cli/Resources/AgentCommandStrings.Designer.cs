@@ -790,10 +790,16 @@ namespace Aspire.Cli.Resources {
         }
 
         internal static string InitCommand_ExistingConfigurationConflict => ResourceManager.GetString("InitCommand_ExistingConfigurationConflict", resourceCulture);
+        /// <summary>
+        ///   Looks up a localized string similar to Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files).
+        /// </summary>
         internal static string InitCommand_AspireSourceOptionDescription => ResourceManager.GetString("InitCommand_AspireSourceOptionDescription", resourceCulture);
         internal static string InitCommand_EmbeddedSkillsChoice => ResourceManager.GetString("InitCommand_EmbeddedSkillsChoice", resourceCulture);
         internal static string InitCommand_ConfigureAspireSourcePrompt => ResourceManager.GetString("InitCommand_ConfigureAspireSourcePrompt", resourceCulture);
         internal static string InitCommand_InvalidSkills => ResourceManager.GetString("InitCommand_InvalidSkills", resourceCulture);
+        /// <summary>
+        ///   Looks up a localized string similar to Agent assets from microsoft/aspire-skills.
+        /// </summary>
         internal static string InitCommand_AspireSkillChoice => ResourceManager.GetString("InitCommand_AspireSkillChoice", resourceCulture);
         internal static string InitCommand_FailedTarget => ResourceManager.GetString("InitCommand_FailedTarget", resourceCulture);
         internal static string InitCommand_InvalidAspireSource => ResourceManager.GetString("InitCommand_InvalidAspireSource", resourceCulture);

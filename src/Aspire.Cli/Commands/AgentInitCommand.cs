@@ -26,6 +26,8 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class AgentInitCommand : BaseCommand
 {
+    internal const string DefaultAspireSource = "remote";
+
     private readonly IAgentEnvironmentDetector _agentEnvironmentDetector;
     private readonly IReadOnlyList<IAgentClient> _clients;
     private readonly IAspireSkillsInstaller _aspireSkillsInstaller;
@@ -133,7 +135,7 @@ internal sealed class AgentInitCommand : BaseCommand
             Description = AgentCommandStrings.InitCommand_AspireSourceOptionDescription,
             Recursive = true,
             Arity = ArgumentArity.ExactlyOne,
-            DefaultValueFactory = static _ => "embedded",
+            DefaultValueFactory = static _ => DefaultAspireSource,
             CustomParser = result =>
             {
                 var value = string.Join(",", result.Tokens.Select(static token => token.Value));
@@ -271,7 +273,7 @@ internal sealed class AgentInitCommand : BaseCommand
             workspaceRoot,
             PromptBinding.Create(parseResult, AgentsOption),
             PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
-            PromptBinding.Create(parseResult, s_aspireSourceOption, "embedded"),
+            PromptBinding.Create(parseResult, s_aspireSourceOption, DefaultAspireSource),
             PromptBinding.Create(parseResult, s_scopeOption, AgentConfigurationScope.Project),
             PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false),
             cancellationToken);
@@ -383,9 +385,9 @@ internal sealed class AgentInitCommand : BaseCommand
         var selectedSkillNames = await InteractionService.PromptForSelectionsAsync(
             AgentCommandStrings.InitCommand_SelectSkills,
             availableSkillChoices,
-            name => name == CommonAgentApplicators.AspireSkillName
+            name => $"{name.EscapeMarkup()} — {(name == CommonAgentApplicators.AspireSkillName
                 ? AgentCommandStrings.InitCommand_AspireSkillChoice
-                : $"{name.EscapeMarkup()} — {SimplifyDescription(SkillDefinition.CliDefined.Single(skill => skill.HasName(name)).Description).EscapeMarkup()}",
+                : SimplifyDescription(SkillDefinition.CliDefined.Single(skill => skill.HasName(name)).Description)).EscapeMarkup()}",
             preSelected: [CommonAgentApplicators.AspireSkillName],
             optional: true,
             binding: skillsBinding,
@@ -409,7 +411,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
             var source = await InteractionService.PromptForSelectionAsync(
                 AgentCommandStrings.InitCommand_ConfigureAspireSourcePrompt,
-                new[] { "embedded", "remote" },
+                new[] { "remote", "embedded" },
                 value => value == "embedded"
                     ? AgentCommandStrings.InitCommand_EmbeddedSkillsChoice
                     : AgentCommandStrings.InitCommand_RemoteSkillsChoice,

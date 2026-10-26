@@ -308,7 +308,7 @@
     <comment>{0} identifies the conflicting JSON setting or environment override.</comment>
   </data>
   <data name="InitCommand_AspireSourceOptionDescription" xml:space="preserve">
-    <value>Source for the selected Aspire integration: remote (plugin) or embedded (bundled skill files)</value>
+    <value>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</value>
   </data>
   <data name="InitCommand_EmbeddedSkillsChoice" xml:space="preserve">
     <value>Embedded (bundled skill files)</value>
@@ -320,7 +320,7 @@
     <value>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
   </data>
   <data name="InitCommand_AspireSkillChoice" xml:space="preserve">
-    <value>Aspire (remote plugin or embedded skills)</value>
+    <value>Agent assets from microsoft/aspire-skills</value>
   </data>
   <data name="InitCommand_FailedTarget" xml:space="preserve">
     <value>Failed to configure Aspire plugin:

@@ -128,13 +128,13 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Aspire (remote plugin or embedded skills)</source>
-        <target state="new">Aspire (remote plugin or embedded skills)</target>
+        <source>Agent assets from microsoft/aspire-skills</source>
+        <target state="new">Agent assets from microsoft/aspire-skills</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSourceOptionDescription">
-        <source>Source for the selected Aspire integration: remote (plugin) or embedded (bundled skill files)</source>
-        <target state="new">Source for the selected Aspire integration: remote (plugin) or embedded (bundled skill files)</target>
+        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
+        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
