@@ -466,13 +466,21 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UpdateConfigSource_MissingBindingFailsWithoutDetectionOrAcquisition()
+    public async Task UpdateConfigSource_MissingBindingSucceedsWithoutDetectionOrAcquisition()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var interaction = new TestInteractionService();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
         var result = provider.GetRequiredService<RootCommand>().Parse("update --config-source --yes --non-interactive");
 
-        Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Empty(interaction.DisplayedErrors);
+        var notice = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal(ConfigSourceStrings.NoBinding, notice.Message);
+        Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride);
         Assert.Equal(0, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
         Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
     }
@@ -513,6 +521,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateConfigSource_RefreshesNearestConfigurationForConfiguredProject(bool bound, bool childConfigExists)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
         await TestConfigSourceServices.SaveBindingAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
         var selected = workspace.CreateDirectory("selected");
         var selectedFile = new FileInfo(Path.Combine(selected.FullName, "apphost.cs"));
@@ -527,6 +536,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         }
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.InteractionServiceFactory = _ => interaction;
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
                 GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(selectedFile)
@@ -543,7 +553,12 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var result = provider.GetRequiredService<RootCommand>().Parse("update --config-source --yes --non-interactive");
 
         var hasBinding = bound || !childConfigExists;
-        Assert.Equal(hasBinding ? CliExitCodes.Success : CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Empty(interaction.DisplayedErrors);
+        if (!hasBinding)
+        {
+            Assert.Equal(ConfigSourceStrings.NoBinding, Assert.Single(interaction.DisplayedMessages).Message);
+        }
         Assert.Equal(hasBinding ? 1 : 0, git.Calls);
         Assert.Equal(bound || childConfigExists ? s_source.AppliedVersion : "version-1", AspireConfigFile.Load(workspace.Path)!.ConfigSource!.AppliedVersion);
         Assert.Equal(bound, AspireConfigFile.Load(selected.FullName)?.ConfigSource is not null);
@@ -667,8 +682,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"update --config-source --apphost \"{requestedDirectory.FullName}\" --yes --non-interactive");
 
-        Assert.Equal(bound ? CliExitCodes.Success : CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
 
+        Assert.Empty(interaction.DisplayedErrors);
         Assert.Equal(bound ? 1 : 0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
         Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
@@ -679,7 +695,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         }
         else
         {
-            Assert.Equal(ConfigSourceStrings.NoBinding, Assert.Single(interaction.DisplayedErrors));
+            var notice = Assert.Single(interaction.DisplayedMessages);
+            Assert.Equal(ConfigSourceStrings.NoBinding, notice.Message);
+            Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride);
             Assert.Equal(originalConfiguration, await File.ReadAllTextAsync(selectedPath));
         }
     }

@@ -55,17 +55,8 @@ public class ConfigSourceGitClientTests(ITestOutputHelper outputHelper)
         Process? child = null;
         try
         {
-            while (child is null)
-            {
-                if (File.Exists(pidFile) && int.TryParse(await File.ReadAllTextAsync(pidFile, cancellation.Token), out var pid))
-                {
-                    child = Process.GetProcessById(pid);
-                }
-                else
-                {
-                    await Task.Delay(20, cancellation.Token);
-                }
-            }
+            var pid = await ProcessTestHelpers.WaitForProcessIdAsync(pidFile, cancellation.Token);
+            child = Process.GetProcessById(pid);
 
             if (parentExits)
             {

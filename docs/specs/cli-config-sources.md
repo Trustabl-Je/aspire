@@ -93,6 +93,8 @@ In C# solution mode, `aspire init` explicitly manages `aspire.config.json` in th
 
 Whether selected implicitly or with an explicit AppHost file or directory, `aspire update --config-source` finds the nearest local settings file from the selected AppHost directory and refreshes its binding and the global settings file's binding, when present. A solution-root binding is selected only when that file is the nearest local configuration. The declaring configuration does not need to identify the AppHost through `appHost.path`.
 
+If neither settings file has a saved binding, report that there is no configuration source to update and exit successfully without Git acquisition or configuration changes. Do not enable a source from initialization environment variables or employee detection during refresh.
+
 Other commands, including standalone `aspire agent init` and `aspire add`, do not prompt to enable a source. Without a saved project `configSource`, they ignore the initialization-source environment variables and employee default.
 
 Non-interactive creation requires `--use-config-source true` to accept the candidate or `--use-config-source false` to decline it. When a candidate is available and neither value is supplied, fail with instructions rather than waiting for input or silently treating employee detection as consent. The same option can bypass the source prompt during interactive creation:
@@ -159,6 +161,8 @@ For example, after applying a source that supplies documentation URLs:
 This is an excerpt; other generated or existing app settings remain in the same file. Once saved, these documentation settings are ordinary project settings. Editing them locally changes subsequent command behavior without editing the source or its tracking copy. A later explicit source update may overwrite them according to the rules above.
 
 Stage and validate an update before replacing the project file. Write the settings and their applied version together so the file cannot claim a version whose values were not saved. If neither the supplied settings nor the saved binding change, report that the app configuration is already up to date and leave the project file untouched. Acquisition, validation, or project-write failure must be reported, without claiming a successful update or leaving a partially written app file.
+
+Success notices identify the destination settings file, so local and global refresh results can be distinguished.
 
 ### Store a tracking copy in Aspire home
 
@@ -230,7 +234,7 @@ When reusing a cached mismatch, record every applied version compared against th
 If an update is available, emit a notice such as:
 
 ```text
-A new version of this project's configuration source is available.
+A new version of the configuration source is available.
 Run `aspire update --config-source` to apply it.
 ```
 

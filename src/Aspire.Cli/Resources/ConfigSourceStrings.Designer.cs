@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to This project&apos;s configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version..
+        ///   Looks up a localized string similar to A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version..
         /// </summary>
         internal static string AppliedVersionMissing
         {
@@ -103,7 +103,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The app&apos;s configuration source changed while fetching. No source settings were applied. Retry using the saved source binding..
+        ///   Looks up a localized string similar to The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding..
         /// </summary>
         internal static string BindingChanged
         {
@@ -125,7 +125,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The configuration source update check failed: {0} Continuing with the app&apos;s saved configuration..
+        ///   Looks up a localized string similar to The configuration source update check failed: {0} Continuing with the saved configuration..
         /// </summary>
         internal static string CheckFailed
         {
@@ -136,18 +136,18 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to A temporary configuration-source Git directory could not be removed. Remove unused acquisition directories when their files are no longer locked..
+        ///   Looks up a localized string similar to The configuration source update check failed. Continuing with the saved configuration..
         /// </summary>
-        internal static string CleanupFailed
+        internal static string CheckFailedWithoutDetails
         {
             get
             {
-                return ResourceManager.GetString("CleanupFailed", resourceCulture);
+                return ResourceManager.GetString("CheckFailedWithoutDetails", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The app configuration could not be locked. No source settings were applied. Retry when other configuration writers have finished..
+        ///   Looks up a localized string similar to The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished..
         /// </summary>
         internal static string ConfigLockFailed
         {
@@ -202,7 +202,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Git was not found. Install Git and ensure it is available on PATH to use this configuration source..
+        ///   Looks up a localized string similar to Git could not be started. Ensure Git is installed and available on PATH to use this configuration source..
         /// </summary>
         internal static string GitNotFound
         {
@@ -213,7 +213,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Acquiring the configuration source timed out. Check repository access and Git credentials, then retry..
+        ///   Looks up a localized string similar to The configuration source Git operation timed out. Check repository access and Git credentials, then retry..
         /// </summary>
         internal static string GitTimeout
         {
@@ -235,7 +235,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The project&apos;s configSource must contain a Git repository address and a repository-relative configuration file path..
+        ///   Looks up a localized string similar to The configSource binding must contain a Git repository address and a repository-relative configuration file path..
         /// </summary>
         internal static string InvalidBinding
         {
@@ -312,7 +312,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to A remote configuration file cannot declare another configSource..
+        ///   Looks up a localized string similar to A source configuration file cannot declare another configSource..
         /// </summary>
         internal static string NestedSource
         {
@@ -323,7 +323,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Neither the nearest local settings file nor the global settings file has a saved configSource. Enable a source with aspire new or aspire init before refreshing it..
+        ///   Looks up a localized string similar to No configuration source to update..
         /// </summary>
         internal static string NoBinding
         {
@@ -345,7 +345,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to app configuration updated.
+        ///   Looks up a localized string similar to configuration updated.
         /// </summary>
         internal static string Refreshed
         {
@@ -356,7 +356,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to app configuration already up to date.
+        ///   Looks up a localized string similar to configuration already up to date.
         /// </summary>
         internal static string RefreshedUnchanged
         {
@@ -389,7 +389,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to A new version of this project&apos;s configuration source is available. Run `aspire update --config-source` to apply it..
+        ///   Looks up a localized string similar to A new version of the configuration source is available. Run `aspire update --config-source` to apply it..
         /// </summary>
         internal static string UpdateAvailable
         {
@@ -400,7 +400,7 @@ namespace Aspire.Cli.Resources
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Applied configuration source {0} ({1}) at commit {2}: {3}..
+        ///   Looks up a localized string similar to Configuration source {0} ({1}) at commit {2}: {3}. Settings file: {4}.
         /// </summary>
         internal static string UseNotice
         {

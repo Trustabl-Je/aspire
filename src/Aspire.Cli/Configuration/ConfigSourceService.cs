@@ -259,7 +259,7 @@ internal sealed class ConfigSourceService(
         }
         interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.UseNotice,
             source.Repository, source.Path, snapshot.Metadata.Commit,
-            changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged), consoleOverride: ConsoleOutput.Error);
+            changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged, path), consoleOverride: ConsoleOutput.Error);
     }
 
     public async Task CheckProjectAsync(DirectoryInfo directory, bool force, CancellationToken cancellationToken)
@@ -329,7 +329,7 @@ internal sealed class ConfigSourceService(
             }
             if (force && !foundBinding)
             {
-                throw new ConfigSourceException(ConfigSourceStrings.NoBinding);
+                interaction.DisplayMessage(KnownEmojis.Information, ConfigSourceStrings.NoBinding, consoleOverride: ConsoleOutput.Error);
             }
         }
         catch (Exception ex) when (!force && ex is ConfigSourceException or JsonException or IOException or UnauthorizedAccessException or TimeoutException)
@@ -341,8 +341,9 @@ internal sealed class ConfigSourceService(
     private void ReportCheckFailure(Exception exception)
     {
         logger.LogDebug("Configuration source version check failed ({FailureType}).", exception.GetType().Name);
-        var message = string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.CheckFailed,
-            exception is ConfigSourceException ? exception.Message : ConfigSourceStrings.InvalidCache);
+        var message = exception is ConfigSourceException
+            ? string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.CheckFailed, exception.Message)
+            : ConfigSourceStrings.CheckFailedWithoutDetails;
         ReportOnce(message, (exception as ConfigSourceException)?.GitOutput);
     }
 
@@ -363,7 +364,7 @@ internal sealed class ConfigSourceService(
         return File.Exists(path)
             ? JsonNode.Parse(await File.ReadAllTextAsync(path, cancellationToken),
                 documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
-                ?? throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration)
+                ?? throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, path))
             : null;
     }
 
@@ -488,8 +489,16 @@ internal sealed class ConfigSourceService(
         var path = Path.Combine(cacheDirectory, "check.json");
         if (File.Exists(path))
         {
-            var previous = JsonSerializer.Deserialize(await File.ReadAllTextAsync(path, cancellationToken),
-                JsonSourceGenerationContext.Default.ConfigSourceCheckMetadata);
+            ConfigSourceCheckMetadata? previous;
+            var json = await File.ReadAllTextAsync(path, cancellationToken);
+            try
+            {
+                previous = JsonSerializer.Deserialize(json, JsonSourceGenerationContext.Default.ConfigSourceCheckMetadata);
+            }
+            catch (JsonException)
+            {
+                throw new ConfigSourceException(ConfigSourceStrings.InvalidCache);
+            }
             if (previous is null || previous.Source is null || !ConfigSource.HasSameIdentity(previous.Source, source)
                 || string.IsNullOrEmpty(previous.Commit) || string.IsNullOrEmpty(previous.Version))
             {

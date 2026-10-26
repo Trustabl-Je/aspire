@@ -226,7 +226,7 @@ The binding's applied version records what was copied into this app, not which b
 Maya's app still contains the documentation settings she last saved. Leo publishes a new source-file version. On the next due version check, an ordinary command reports:
 
 ```text
-A new version of this project's configuration source is available.
+A new version of the configuration source is available.
 Run `aspire update --config-source` to apply it.
 ```
 
@@ -269,7 +269,7 @@ A successful explicit fetch records the fetch time even if the source-file versi
 
 If authentication expires, Maya repairs Git access, verifies it with `git ls-remote`, and retries. If acquisition or validation fails during an explicit update, the update exits nonzero and preserves the previous app configuration, applied version, and fetched tracking copy. This is different from an advisory check failure.
 
-`aspire update --config-source` is not a way to enable a source on an unbound project. That operation fails without a saved binding, and the option cannot be combined with CLI self-update, migration, or channel/package-source overrides. A binding without an applied version gets instructions to run this explicit update rather than having source values silently loaded. Configuration sources are not supported in legacy `.aspire/settings.json` files.
+`aspire update --config-source` is not a way to enable a source on an unbound project. If neither the nearest local settings file nor the global settings file has a saved binding, it reports that there is no configuration source to update and exits successfully without changing configuration or acquiring a source. The option cannot be combined with CLI self-update, migration, or channel/package-source overrides. A binding without an applied version gets instructions to run this explicit update rather than having source values silently loaded. Configuration sources are not supported in legacy `.aspire/settings.json` files.
 
 ## Scenario 6: Priya explicitly selects a team configuration during initialization
 

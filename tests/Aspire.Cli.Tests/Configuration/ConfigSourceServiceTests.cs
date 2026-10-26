@@ -1491,21 +1491,37 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal("version-1", AspireConfigFile.Load(workspace.Path)!.ConfigSource!.AppliedVersion);
     }
 
-    [Fact]
-    public async Task CheckProject_NoBindingDoesNotDetectOrAcquire()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CheckProject_NoBindingDoesNotDetectOrAcquire(bool force)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var git = new TestConfigSourceGitClient();
         var detector = new TestConfigSourceDetector { IsInternal = true };
-        var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, detector: detector);
+        var interaction = new TestInteractionService();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, detector: detector, interaction: interaction);
 
-        await service.CheckProjectAsync(workspace.WorkspaceRoot, false, CancellationToken.None);
+        await service.CheckProjectAsync(workspace.WorkspaceRoot, force, CancellationToken.None);
 
-        Assert.Equal(ConfigSourceStrings.NoBinding, (await Assert.ThrowsAsync<ConfigSourceException>(() =>
-            service.CheckProjectAsync(workspace.WorkspaceRoot, true, CancellationToken.None))).Message);
+        service.NotifyIfUpdateAvailable();
+        Assert.Empty(interaction.DisplayedErrors);
+        if (force)
+        {
+            var notice = Assert.Single(interaction.DisplayedMessages);
+            Assert.Equal(KnownEmojis.Information, notice.Emoji);
+            Assert.Equal(ConfigSourceStrings.NoBinding, notice.Message);
+            Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride);
+        }
+        else
+        {
+            Assert.Empty(interaction.DisplayedMessages);
+        }
         Assert.Equal(0, detector.Calls);
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
+        Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+        Assert.False(Directory.Exists(service.GetCacheDirectory(s_source)));
     }
 
     [Fact]

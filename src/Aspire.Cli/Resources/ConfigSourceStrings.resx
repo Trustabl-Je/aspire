@@ -82,14 +82,14 @@
     <value>The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</value>
   </data>
   <data name="NestedSource" xml:space="preserve">
-    <value>A remote configuration file cannot declare another configSource.</value>
+    <value>A source configuration file cannot declare another configSource.</value>
     <comment>Do not translate "configSource".</comment>
   </data>
   <data name="GitTimeout" xml:space="preserve">
-    <value>Acquiring the configuration source timed out. Check repository access and Git credentials, then retry.</value>
+    <value>The configuration source Git operation timed out. Check repository access and Git credentials, then retry.</value>
   </data>
   <data name="GitNotFound" xml:space="preserve">
-    <value>Git was not found. Install Git and ensure it is available on PATH to use this configuration source.</value>
+    <value>Git could not be started. Ensure Git is installed and available on PATH to use this configuration source.</value>
     <comment>Do not translate "PATH".</comment>
   </data>
   <data name="AuthenticationFailed" xml:space="preserve">
@@ -129,49 +129,49 @@ Source origin: {3}</value>
     <comment>Do not translate "--use-config-source", "true", or "false".</comment>
   </data>
   <data name="NoBinding" xml:space="preserve">
-    <value>Neither the nearest local settings file nor the global settings file has a saved configSource. Enable a source with aspire new or aspire init before refreshing it.</value>
-    <comment>Do not translate "configSource", "aspire new", or "aspire init".</comment>
+    <value>No configuration source to update.</value>
   </data>
   <data name="InvalidBinding" xml:space="preserve">
-    <value>The project's configSource must contain a Git repository address and a repository-relative configuration file path.</value>
+    <value>The configSource binding must contain a Git repository address and a repository-relative configuration file path.</value>
     <comment>Do not translate "configSource".</comment>
   </data>
   <data name="InvalidCache" xml:space="preserve">
     <value>The configuration source cache is invalid. Restore or remove its cache entry and retry.</value>
   </data>
   <data name="UseNotice" xml:space="preserve">
-    <value>Applied configuration source {0} ({1}) at commit {2}: {3}.</value>
-    <comment>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, and {3} is the localized app configuration update result.</comment>
+    <value>Configuration source {0} ({1}) at commit {2}: {3}.
+Settings file: {4}</value>
+    <comment>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</comment>
   </data>
   <data name="Refreshed" xml:space="preserve">
-    <value>app configuration updated</value>
+    <value>configuration updated</value>
   </data>
   <data name="RefreshedUnchanged" xml:space="preserve">
-    <value>app configuration already up to date</value>
+    <value>configuration already up to date</value>
   </data>
   <data name="UpdateAvailable" xml:space="preserve">
-    <value>A new version of this project's configuration source is available. Run `aspire update --config-source` to apply it.</value>
+    <value>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</value>
     <comment>Do not translate "aspire update --config-source".</comment>
   </data>
   <data name="AppliedVersionMissing" xml:space="preserve">
-    <value>This project's configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</value>
+    <value>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</value>
     <comment>Do not translate "aspire update --config-source".</comment>
   </data>
   <data name="CheckFailed" xml:space="preserve">
-    <value>The configuration source update check failed: {0} Continuing with the app's saved configuration.</value>
+    <value>The configuration source update check failed: {0} Continuing with the saved configuration.</value>
     <comment>{0} is the configuration source check failure message.</comment>
   </data>
+  <data name="CheckFailedWithoutDetails" xml:space="preserve">
+    <value>The configuration source update check failed. Continuing with the saved configuration.</value>
+  </data>
   <data name="ConfigLockFailed" xml:space="preserve">
-    <value>The app configuration could not be locked. No source settings were applied. Retry when other configuration writers have finished.</value>
+    <value>The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished.</value>
   </data>
   <data name="BindingChanged" xml:space="preserve">
-    <value>The app's configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</value>
+    <value>The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</value>
   </data>
   <data name="IncompatibleOptions" xml:space="preserve">
     <value>--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</value>
     <comment>Do not translate the command-line option names.</comment>
-  </data>
-  <data name="CleanupFailed" xml:space="preserve">
-    <value>A temporary configuration-source Git directory could not be removed. Remove unused acquisition directories when their files are no longer locked.</value>
   </data>
 </root>
