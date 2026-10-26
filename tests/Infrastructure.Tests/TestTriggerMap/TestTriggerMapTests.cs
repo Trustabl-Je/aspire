@@ -671,6 +671,7 @@ public sealed class TestTriggerMapTests
     [InlineData("Aspire.Dashboard")]
     [InlineData("Aspire.TerminalHost")]
     [InlineData("CreateLayout")]
+    [InlineData("Aspire.Hosting.Native.Server")]
     [InlineData("Aspire.Hosting.AppHost")]
     [InlineData("Aspire.Hosting.Dotnet")]
     [InlineData("Aspire.ProjectTemplates")]

@@ -597,6 +597,7 @@ affected_project_rules:
       - Aspire.Dashboard
       - Aspire.TerminalHost
       - CreateLayout
+      - Aspire.Hosting.Native.Server
       - Aspire.Hosting.AppHost
       - Aspire.Hosting.Dotnet
       - Aspire.ProjectTemplates
