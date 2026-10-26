@@ -22,7 +22,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settingsFilePath = EnsureAspireConfigFileForAppHostPathSettings(settingsFilePath);
         }
 
-        using var configLock = isGlobal ? null : await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+        using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
             executionContext, new FileInfo(settingsFilePath), logger, cancellationToken);
         await SetConfigurationInFileAsync(settingsFilePath, key, value, cancellationToken);
     }
@@ -54,7 +54,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     public async Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
     {
         var settingsFilePath = GetSettingsFilePath(isGlobal);
-        using var configLock = isGlobal ? null : await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+        using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
             executionContext, new FileInfo(settingsFilePath), logger, cancellationToken);
 
         if (!File.Exists(settingsFilePath))

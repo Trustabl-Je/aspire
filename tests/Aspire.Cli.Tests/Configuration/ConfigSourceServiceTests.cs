@@ -1330,6 +1330,74 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Initialization_ExistingBindingDoesNotRequireConsentOrReapplySettings(bool legacy)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        if (legacy)
+        {
+            var legacyPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
+            File.Move(path, legacyPath, overwrite: true);
+            path = legacyPath;
+        }
+        await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/llms.txt");
+        var original = await File.ReadAllTextAsync(path);
+        var git = new TestConfigSourceGitClient();
+        var detector = new TestConfigSourceDetector { IsInternal = true };
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = "https://other.example/configuration"
+        });
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
+            environment: environment, detector: detector);
+
+        Assert.Null(await service.SelectForInitializationAsync(workspace.WorkspaceRoot, ParseConsent(null), CancellationToken.None));
+        await service.WaitForChecksAsync().DefaultTimeout();
+
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+        Assert.Equal(0, detector.Calls);
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(1, git.CheckCalls);
+        Assert.Equal(!legacy, File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Initialization_DoesNotReuseAncestorOrShadowedLegacyBinding(bool unboundModernFile)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
+        var project = workspace.CreateDirectory("project");
+        if (unboundModernFile)
+        {
+            await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, project, CancellationToken.None);
+            var modernPath = Path.Combine(project.FullName, AspireConfigFile.FileName);
+            var legacyPath = Path.Combine(project.CreateSubdirectory(".aspire").FullName, "settings.json");
+            File.Move(modernPath, legacyPath);
+            await File.WriteAllTextAsync(modernPath, "{}");
+        }
+        var git = new TestConfigSourceGitClient();
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = s_source.Repository,
+            [CliConfigNames.InitSourcePath] = s_source.Path,
+            [CliConfigNames.InitSourceRef] = s_source.Ref
+        });
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, environment: environment);
+
+        var source = await service.SelectForInitializationAsync(project, ParseConsent(true), CancellationToken.None);
+
+        Assert.NotNull(source);
+        Assert.True(ConfigSource.HasSameIdentity(s_source, source));
+        Assert.Equal(1, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+    }
+
+    [Theory]
     [InlineData("https://git.example/config", "HEAD")]
     [InlineData("file:///local/repository", "main")]
     public async Task Initialization_InvalidSavedBindingReportsFailureWithoutRetargeting(string repository, string gitRef)

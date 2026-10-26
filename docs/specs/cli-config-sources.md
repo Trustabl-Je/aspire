@@ -85,7 +85,7 @@ Use configuration from this source?
 - **Decline:** continue normally, without Git acquisition or a `configSource` entry.
 - **Cancel:** stop without creating the application.
 
-The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` without repeating the prompt. An environment variable or employee detection alone never enables a source.
+The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` without repeating the prompt. Initialization checks the target directory's modern configuration first, falling back to its legacy `.aspire/settings.json` only when the modern file is absent; it does not reuse an ancestor's binding. An environment variable or employee detection alone never enables a source.
 
 In C# solution mode, `aspire init` explicitly manages `aspire.config.json` in the solution directory for source selection, advisory checks, and materialization. An existing solution-root binding is reused without renewed consent or reapplying source values, even when the initialization environment proposes another source. Initialization does not create a second source binding in the generated AppHost directory. This is explicit configuration-file selection, not inheritance of the source binding. File-based and polyglot initialization use the working-directory configuration.
 
@@ -182,6 +182,8 @@ Keep advisory check state separate in `check.json`: the last successful check ti
 Use locks and atomic publication to prevent partially written tracking records. Retain user-scoped permissions for private content. Never store credentials in configuration or metadata, log them, or send private source details in ordinary telemetry.
 
 Publish fetched tracking data before changing the app file. A tracking-publication failure leaves the app unchanged. If a later app read or write fails, report the operation as failed: tracking can record the successfully fetched source, but the app's settings and applied version remain unchanged. Apply settings and their version together using an atomic sibling-file replacement under the workspace configuration lock, re-reading the app file after acquisition to preserve concurrent edits. Create the temporary file with owner-only Unix permissions or the existing destination's Windows access rules. Preserve the destination's Unix mode or Windows DACL when replacing it; new Unix configuration files remain owner-only.
+
+Global source refresh uses the same path-based configuration lock as local refresh. Both local and global `aspire config set` and `aspire config delete` operations acquire that lock so they cannot overwrite a refresh with a stale read or lose an unrelated edit to the refresh.
 
 A tracking copy is shared by source identity, not a record of what every application has applied. An ordinary command must work from its app file even when this directory is missing, another app refreshed the same source, or the retained JSON is unreadable. Problems with the tracking/version check are reported separately; they do not make cached values a fallback runtime provider.
 

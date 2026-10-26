@@ -199,6 +199,11 @@ internal sealed class ConfigSourceService(
     {
         EnsureSameProject(projectDirectory);
         var path = Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
+        if (!File.Exists(path))
+        {
+            // Reuse a binding in this project's legacy file, but never inherit an ancestor's.
+            path = ConfigurationHelper.BuildPathToSettingsJsonFile(projectDirectory.FullName);
+        }
         var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
         if (configuration is not null && TryGetValue(configuration, [ConfigSource.SectionName], out _))
         {

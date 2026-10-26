@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
@@ -775,8 +776,10 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>()).Calls);
     }
 
-    [Fact]
-    public async Task Init_ExistingBindingChecksWithoutReapplyingOrRetargeting()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Init_ExistingBindingChecksWithoutReapplyingOrRetargeting(bool legacy)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string command = "init --file-based --language csharp --suppress-agent-init --use-config-source true --non-interactive";
@@ -785,6 +788,12 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(CliExitCodes.Success, await original.GetRequiredService<RootCommand>().Parse(command).InvokeAsync().DefaultTimeout());
         }
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        if (legacy)
+        {
+            var legacyPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
+            File.Move(path, legacyPath, overwrite: true);
+            path = legacyPath;
+        }
         await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/llms.txt");
         var services = CreateCreationServices(workspace);
         services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
@@ -793,11 +802,12 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         }));
         using var provider = services.BuildServiceProvider();
 
-        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>().Parse(command).InvokeAsync().DefaultTimeout());
+        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>().Parse(
+            "init --file-based --language csharp --suppress-agent-init --non-interactive").InvokeAsync().DefaultTimeout());
 
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
         Assert.Equal("https://local.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
-        Assert.Equivalent(s_source, AspireConfigFile.Load(workspace.Path)!.ConfigSource, strict: true);
+        Assert.Equivalent(s_source, configuration["configSource"]!.Deserialize(JsonSourceGenerationContext.Default.ConfigSource), strict: true);
         var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
