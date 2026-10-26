@@ -93,6 +93,8 @@ In C# solution mode, `aspire init` explicitly manages `aspire.config.json` in th
 
 Whether selected implicitly or with an explicit AppHost file or directory, `aspire update --config-source` finds the nearest local settings file from the selected AppHost directory and refreshes its binding and the global settings file's binding, when present. A solution-root binding is selected only when that file is the nearest local configuration. The declaring configuration does not need to identify the AppHost through `appHost.path`.
 
+An explicit AppHost path must exist as a file or directory. A nonexistent target fails before Git acquisition or changes to local or global settings. An existing directory without an AppHost can still refresh its nearest local and global configuration bindings.
+
 If neither settings file has a saved binding, report that there is no configuration source to update and exit successfully without Git acquisition or configuration changes. Do not enable a source from initialization environment variables or employee detection during refresh.
 
 Other commands, including standalone `aspire agent init` and `aspire add`, do not prompt to enable a source. Without a saved project `configSource`, they ignore the initialization-source environment variables and employee default.

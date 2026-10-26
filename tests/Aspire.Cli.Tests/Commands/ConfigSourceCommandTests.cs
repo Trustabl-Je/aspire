@@ -442,11 +442,48 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(Path.Combine(project.FullName, AspireConfigFile.FileName)));
     }
 
+    [Theory]
+    [InlineData("missing.cs")]
+    [InlineData("missing.csproj")]
+    [InlineData("missing-directory")]
+    [InlineData("missing-directory/apphost.cs")]
+    public async Task UpdateConfigSource_MissingExplicitPathFailsWithoutRefreshingBindings(string requestedPath)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await TestConfigSourceServices.SaveBindingAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
+        var localPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var originalLocalConfiguration = await File.ReadAllTextAsync(localPath);
+        var interaction = new TestInteractionService();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var globalFile = new FileInfo(provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true));
+        globalFile.Directory!.Create();
+        await TestConfigSourceServices.SaveBindingAsync(s_source, globalFile.Directory, CancellationToken.None);
+        File.Move(Path.Combine(globalFile.Directory.FullName, AspireConfigFile.FileName), globalFile.FullName);
+        var originalGlobalConfiguration = await File.ReadAllTextAsync(globalFile.FullName);
+        var git = Assert.IsType<TestConfigSourceGitClient>(provider.GetRequiredService<IConfigSourceGitClient>());
+        git.Acquire = (_, _) => Task.FromResult(("commit-2", "version-2", new JsonObject()));
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"update --config-source --apphost \"{Path.Combine(workspace.Path, requestedPath)}\" --yes --non-interactive");
+        Assert.Empty(result.Errors);
+
+        Assert.Equal(CliExitCodes.FailedToFindProject, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(InteractionServiceStrings.ProjectOptionDoesntExist, Assert.Single(interaction.DisplayedErrors));
+        Assert.Equal(0, git.Calls);
+        Assert.Equal(0, git.CheckCalls);
+        Assert.Equal(0, Assert.IsType<TestConfigSourceDetector>(provider.GetRequiredService<IInternalMicrosoftDetector>()).Calls);
+        Assert.Equal(originalLocalConfiguration, await File.ReadAllTextAsync(localPath));
+        Assert.Equal(originalGlobalConfiguration, await File.ReadAllTextAsync(globalFile.FullName));
+    }
+
     [Fact]
     public async Task UpdateConfigSource_ExplicitAppHostRefreshesNearestBindingOnly()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var project = workspace.CreateDirectory("selected-project");
+        await File.WriteAllTextAsync(Path.Combine(project.FullName, "apphost.cs"), "#:sdk Aspire.AppHost.Sdk");
         await TestConfigSourceServices.SaveBindingAsync(
             new ConfigSource { Repository = "https://parent.example/configuration", Path = "parent.json", AppliedVersion = "parent-version" },
             workspace.WorkspaceRoot, CancellationToken.None);
@@ -493,6 +530,10 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var localPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(localPath, "{}");
+        if (explicitAppHost)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "apphost.cs"), "#:sdk Aspire.AppHost.Sdk");
+        }
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
         var globalFile = new FileInfo(provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true));
         globalFile.Directory!.Create();

@@ -204,7 +204,13 @@ internal sealed class UpdateCommand : BaseCommand
     {
         if (parseResult.GetValue(s_configSourceOption))
         {
-            var directory = await ResolveConfigSourceDirectoryAsync(parseResult.GetValue(s_appHostOption), cancellationToken);
+            var requestedFile = parseResult.GetValue(s_appHostOption);
+            if (requestedFile is not null && !requestedFile.Exists && !Directory.Exists(requestedFile.FullName))
+            {
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist);
+            }
+
+            var directory = await ResolveConfigSourceDirectoryAsync(requestedFile, cancellationToken);
             await ConfigSources.CheckProjectAsync(directory, force: true, cancellationToken);
             return CommandResult.Success();
         }
