@@ -223,9 +223,11 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ConfiguredGitSources_CancellationStopsSearchAndCleansPartialClone(bool cancelResolution)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task ConfiguredGitSources_CancellationStopsSearchAndCleansPartialClone(bool cancelResolution, bool useObjectSource)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellation = new CancellationTokenSource();
@@ -254,7 +256,9 @@ public partial class NewCommandLocalTemplateTests
         using var provider = services.BuildServiceProvider();
         await WriteConfiguredSourcesAsync(provider, new()
         {
-            ["first"] = "https://example.test/first.git",
+            ["first"] = useObjectSource
+                ? new { repository = "https://example.test/first.git", @ref = "release/17.0", path = "templates" }
+                : "https://example.test/first.git",
             ["second"] = "https://example.test/second.git"
         });
 
@@ -276,9 +280,11 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ConfiguredGitSources_HelpAndDefaultPickerDoNotAcquireRepositories(bool help)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task ConfiguredGitSources_HelpAndDefaultPickerDoNotAcquireRepositories(bool help, bool useObjectSource)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var cancellation = new CancellationTokenSource();
@@ -287,7 +293,11 @@ public partial class NewCommandLocalTemplateTests
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IGitRunner>(git);
         using var provider = services.BuildServiceProvider();
-        await WriteConfiguredSourcesAsync(provider, new() { ["company"] = "https://example.test/templates.git" });
+        const string repository = "https://example.test/templates.git";
+        await WriteConfiguredSourcesAsync(provider, new()
+        {
+            ["company"] = useObjectSource ? new { repository, @ref = "release/17.0", path = "templates" } : repository
+        });
         interaction.PromptForSelectionCallback = (_, _, _, _) =>
         {
             cancellation.Cancel();

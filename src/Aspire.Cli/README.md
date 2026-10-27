@@ -99,6 +99,9 @@ Register named local directories or Git repositories in the CLI's global configu
 ```bash
 aspire config set templates.company /absolute/path/to/company-templates --global
 aspire config set templates.examples https://github.com/microsoft/aspire-templates --global
+aspire config set templates.release.repository https://github.com/microsoft/aspire-templates --global
+aspire config set templates.release.ref release/17.0 --global
+aspire config set templates.release.path templates --global
 ```
 
 This writes the following shape to the global `~/.aspire/aspire.config.json` file:
@@ -107,7 +110,12 @@ This writes the following shape to the global `~/.aspire/aspire.config.json` fil
 {
   "templates": {
     "company": "/absolute/path/to/company-templates",
-    "examples": "https://github.com/microsoft/aspire-templates"
+    "examples": "https://github.com/microsoft/aspire-templates",
+    "release": {
+      "repository": "https://github.com/microsoft/aspire-templates",
+      "ref": "release/17.0",
+      "path": "templates"
+    }
   }
 }
 ```
@@ -127,12 +135,19 @@ Use Git's existing credential helper or SSH authentication rather than storing c
 in a template source. The CLI must be able to access the repository without an
 interactive Git credential prompt.
 
-Each search resolves the repository's default `HEAD` to a commit and reuses a cached
-checkout of that commit, cloning only when it is not already cached. Generation uses
-the selected checkout even if the remote subsequently changes. Repository objects
-with explicit `ref`/`path` and searchable endpoints are not supported yet; the existing
-explicit `--template-repository`, `--template-repository-ref`, and `--template-path`
-options are unchanged.
+Use a repository object to select a branch, tag, or full commit SHA with `ref`, or
+limit discovery to a repository-relative `path`. Omit `ref` to use the default `HEAD`
+and omit `path` to search the repository root (`.`). Paths must stay inside the
+repository and must not traverse symbolic links. Object fields are case-sensitive:
+only `repository`, `ref`, and `path` are accepted; supplied values must be nonempty
+strings. Repository objects use the same URL restrictions as repository strings.
+
+Each search resolves the selected ref to a commit and reuses a cached checkout of
+that commit, cloning only when it is not already cached. Multiple paths and refs
+resolving to the same repository commit share its checkout. Generation uses the
+selected checkout even if the remote subsequently changes. Searchable endpoints
+are not supported yet; the existing explicit `--template-repository`,
+`--template-repository-ref`, and `--template-path` options are unchanged.
 
 Run `aspire new` interactively and select **Search for more templates** beneath the
 default templates. Enter text to search template names and descriptions, or leave

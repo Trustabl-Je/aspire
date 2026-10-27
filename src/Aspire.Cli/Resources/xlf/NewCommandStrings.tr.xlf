@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InvalidConfiguredTemplateSource">
-        <source>Template sources must have a nonempty name and an absolute directory path or an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. Repository objects and searchable endpoints are not supported yet.</source>
-        <target state="new">Template sources must have a nonempty name and an absolute directory path or an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. Repository objects and searchable endpoints are not supported yet.</target>
+        <source>Template sources must have a nonempty name and be an absolute directory path, an HTTPS or SSH Git repository URL, or an object containing only a required 'repository' URL and optional nonempty 'ref' and 'path' strings. Repository URLs must not contain passwords, tokens, queries, or fragments. Searchable endpoints are not supported yet.</source>
+        <target state="new">Template sources must have a nonempty name and be an absolute directory path, an HTTPS or SSH Git repository URL, or an object containing only a required 'repository' URL and optional nonempty 'ref' and 'path' strings. Repository URLs must not contain passwords, tokens, queries, or fragments. Searchable endpoints are not supported yet.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidProjectName">
@@ -238,8 +238,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryPathInvalid">
-        <source>When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</source>
-        <target state="new">When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links.</target>
+        <source>Template repository paths must be relative and stay within the repository without traversing symbolic links.</source>
+        <target state="new">Template repository paths must be relative and stay within the repository without traversing symbolic links.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateRepositoryRefNotFound">

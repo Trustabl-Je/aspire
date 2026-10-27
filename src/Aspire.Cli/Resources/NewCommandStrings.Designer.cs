@@ -469,7 +469,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to When --template-repository is specified, --template-path must be relative and stay within the repository without traversing symbolic links..
+        ///   Looks up a localized string similar to Template repository paths must be relative and stay within the repository without traversing symbolic links..
         /// </summary>
         internal static string TemplateRepositoryPathInvalid {
             get {

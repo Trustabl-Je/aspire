@@ -98,7 +98,34 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("\"https://example.test\\\\templates\"")]
     [InlineData("\"https://example.test/templates with spaces\"")]
     [InlineData("\"https://example.test/templates\\n\"")]
-    [InlineData("""{ "repository": "https://example.test/templates", "ref": "main" }""")]
+    [InlineData("""{ "path": "templates" }""")]
+    [InlineData("""{ "repository": null }""")]
+    [InlineData("""{ "repository": false }""")]
+    [InlineData("""{ "repository": 42 }""")]
+    [InlineData("""{ "repository": {} }""")]
+    [InlineData("""{ "repository": [] }""")]
+    [InlineData("""{ "repository": "" }""")]
+    [InlineData("""{ "repository": " " }""")]
+    [InlineData("""{ "repository": "/local/repository" }""")]
+    [InlineData("""{ "repository": "http://example.test/templates" }""")]
+    [InlineData("""{ "repository": "git@example.test:templates" }""")]
+    [InlineData("""{ "repository": "https://token@example.test/templates" }""")]
+    [InlineData("""{ "repository": "https://example.test/templates?q=search" }""")]
+    [InlineData("""{ "repository": "https://example.test/templates#main" }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "ref": null }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "ref": 42 }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "ref": {} }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "ref": "" }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "ref": " " }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "ref": "main\n" }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "path": null }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "path": false }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "path": [] }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "path": "" }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "path": " " }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "path": "templates\u0000" }""")]
+    [InlineData("""{ "repository": "https://example.test/templates", "refs": "release/17.0" }""")]
+    [InlineData("""{ "Repository": "https://example.test/templates" }""")]
     public async Task ConfiguredSources_InvalidEntryDoesNotHideValidSources(string invalidValue)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -440,7 +467,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
     }
 
-    private static Task WriteConfiguredSourcesAsync(IServiceProvider provider, Dictionary<string, string> sources) =>
+    private static Task WriteConfiguredSourcesAsync(IServiceProvider provider, Dictionary<string, object> sources) =>
         File.WriteAllTextAsync(provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true),
             JsonSerializer.Serialize(new { templates = sources }));
 

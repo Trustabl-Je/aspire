@@ -23,8 +23,9 @@ internal sealed class ConfiguredTemplateSourceService(
         {
             using var settings = JsonDocument.Parse(
                 await File.ReadAllTextAsync(settingsPath, cancellationToken), ConfigurationHelper.ParseOptions);
-            // Named sources can be paths or URLs, e.g.
-            // { "templates": { "local": "/absolute/path", "remote": "https://host/repo" } }.
+            // Sources are path/URL strings or Git objects, e.g.
+            // { "templates": { "local": "/absolute/path",
+            //   "remote": { "repository": "https://host/repo", "ref": "main", "path": "templates" } } }.
             // Read the JSON directly to preserve value types and avoid project-config overrides.
             if (settings.RootElement.ValueKind is not JsonValueKind.Object)
             {
@@ -45,28 +46,13 @@ internal sealed class ConfiguredTemplateSourceService(
             foreach (var entry in templates.EnumerateObject())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (string.IsNullOrWhiteSpace(entry.Name) ||
-                    entry.Value.ValueKind is not JsonValueKind.String ||
-                    entry.Value.GetString() is not { } value ||
-                    string.IsNullOrWhiteSpace(value) ||
-                    value.Any(char.IsControl))
+                if (string.IsNullOrWhiteSpace(entry.Name) || ParseSource(entry.Value) is not { } source)
                 {
                     Warn(entry.Name, NewCommandStrings.InvalidConfiguredTemplateSource);
                     continue;
                 }
 
-                if (Path.IsPathFullyQualified(value))
-                {
-                    sources.Add(new(entry.Name, new TemplateSource(value, null, null)));
-                }
-                else if (GitRepositoryUrl.IsValid(value))
-                {
-                    sources.Add(new(entry.Name, new TemplateSource(".", value, null)));
-                }
-                else
-                {
-                    Warn(entry.Name, NewCommandStrings.InvalidConfiguredTemplateSource);
-                }
+                sources.Add(new(entry.Name, source));
             }
 
             return sources;
@@ -81,6 +67,51 @@ internal sealed class ConfiguredTemplateSourceService(
             return [];
         }
     }
+
+    private static TemplateSource? ParseSource(JsonElement value)
+    {
+        if (ReadSourceString(value) is { } source)
+        {
+            return Path.IsPathFullyQualified(source)
+                ? new TemplateSource(source, null, null)
+                : GitRepositoryUrl.IsValid(source) ? new TemplateSource(".", source, null) : null;
+        }
+
+        if (value.ValueKind is not JsonValueKind.Object ||
+            value.EnumerateObject().Any(property => property.Name is not ("repository" or "ref" or "path")) ||
+            !value.TryGetProperty("repository", out var repositoryElement) ||
+            ReadSourceString(repositoryElement) is not { } repository ||
+            !GitRepositoryUrl.IsValid(repository))
+        {
+            return null;
+        }
+
+        var path = value.TryGetProperty("path", out var pathElement) ? ReadSourceString(pathElement) : ".";
+        if (path is null)
+        {
+            return null;
+        }
+
+        string? reference = null;
+        if (value.TryGetProperty("ref", out var refElement))
+        {
+            reference = ReadSourceString(refElement);
+            if (reference is null)
+            {
+                return null;
+            }
+        }
+
+        // The shared acquisition pipeline validates repository-relative paths before fetching
+        // and checks for symlink traversal after checkout, just as it does for explicit options.
+        return new TemplateSource(path, repository, reference);
+    }
+
+    private static string? ReadSourceString(JsonElement value) =>
+        value.ValueKind is JsonValueKind.String &&
+        value.GetString() is { } text &&
+        !string.IsNullOrWhiteSpace(text) &&
+        !text.Any(char.IsControl) ? text : null;
 
     public async Task<IReadOnlyList<ConfiguredTemplate>> SearchAsync(string query, CancellationToken cancellationToken)
     {
