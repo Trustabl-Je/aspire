@@ -2202,7 +2202,7 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return new EndpointReference(builder.Resource, name, contextNetworkId);
+        return builder.Resource.GetEndpoint(name, contextNetworkId);
     }
 
     /// <summary>
@@ -2219,7 +2219,7 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return new EndpointReference(builder.Resource, name);
+        return builder.Resource.GetEndpoint(name);
     }
 
     /// <summary>

@@ -10,6 +10,7 @@ using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
+using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
@@ -18,6 +19,128 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [RequiresTools(["helm"])]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserOriginJsonRendersAsYamlString(bool configured)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        environment.AddIngress("public").WithHostname("public.example").WithHostname("alias.example").WithPath("/", web.GetEndpoint("http"));
+        var origin = web.GetEndpoint("HTTP", KnownNetworkIdentifiers.LocalhostNetwork).BrowserOrigins.AsJson();
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGINS_JSON", origin)
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origins={origin}"))
+            .WithEnvironment("MULTILINE", builder.AddParameter("multiline", "first \"quoted\" line\nsecond\\line", publishValueAsDefault: true))
+            .WithEnvironment("PORT", web.GetEndpoint("HTTP").Property(EndpointProperty.Port));
+        var expected = configured ? "[\"https://override.example\",\"https://alias.example\"]" : "[\"http://public.example\",\"http://alias.example\"]";
+        if (configured)
+        {
+            builder.Configuration["Parameters:web-http-BrowserOriginsJson"] = expected;
+        }
+        using var app = builder.Build();
+        app.Run();
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(workspace.Path, environment.Resource, TestContext.Current.CancellationToken);
+        var rendered = new System.Text.StringBuilder();
+        var errors = new System.Text.StringBuilder();
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        var arguments = "template origin-test . --show-only templates/consumer/config.yaml";
+        if (File.Exists(overridePath))
+        {
+            arguments += $" -f \"{overridePath}\"";
+        }
+        var exitCode = await new DefaultHelmRunner().RunAsync(arguments, workspace.Path,
+            line => rendered.AppendLine(line), line => errors.AppendLine(line), TestContext.Current.CancellationToken);
+        Assert.True(exitCode == 0, errors.ToString());
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(rendered.ToString()));
+        var map = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        var data = Assert.IsType<YamlMappingNode>(map.Children[new YamlScalarNode("data")]);
+        Assert.Equal(expected, Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("ORIGINS_JSON")]).Value);
+        Assert.Equal($"origins={expected}", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("CONFIG")]).Value);
+        Assert.Equal("first \"quoted\" line\nsecond\\line", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("MULTILINE")]).Value);
+        Assert.Equal("8080", Assert.IsType<YamlScalarNode>(data.Children[new YamlScalarNode("PORT")]).Value);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BrowserOriginDefaultsRequireInputForDeferredTlsHostnameScope(bool gateway)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var hostname = builder.AddParameter("tls-hostname", "web.example.com");
+        if (gateway)
+        {
+            environment.AddGateway("public").WithGatewayClass("test").WithHostname(hostname)
+                .WithTls("certificate").WithRoute("web.example.com", "/", web.GetEndpoint("http"));
+        }
+        else
+        {
+            environment.AddIngress("public").WithHostname(hostname)
+                .WithTls("certificate").WithPath("web.example.com", "/", web.GetEndpoint("http"));
+        }
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var target = Assert.IsType<KubernetesResource>(consumer.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        Assert.Null(target.EnvironmentVariables["ORIGIN"].ParameterSource!.Default);
+    }
+
+    [Theory]
+    [InlineData(false, "web.example.com", true)]
+    [InlineData(true, "web.example.com", true)]
+    [InlineData(false, "a.web.example.com", false)]
+    [InlineData(true, "a.web.example.com", true)]
+    [InlineData(false, "example.com", false)]
+    [InlineData(true, "example.com", false)]
+    [InlineData(false, "web.otherexample.com", false)]
+    [InlineData(true, "web.otherexample.com", false)]
+    [InlineData(false, "WEB.EXAMPLE.COM", true)]
+    [InlineData(true, "WEB.EXAMPLE.COM", true)]
+    public async Task BrowserOriginDefaultsRespectWildcardTlsHostnameScope(bool gateway, string hostname, bool https)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var consumer = builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins.First);
+        if (gateway)
+        {
+            environment.AddGateway("public").WithGatewayClass("test").WithHostname("*.example.com")
+                .WithTls("certificate").WithRoute(hostname, "/", web.GetEndpoint("http"));
+        }
+        else
+        {
+            environment.AddIngress("public").WithHostname("*.example.com")
+                .WithTls("certificate").WithPath(hostname, "/", web.GetEndpoint("http"));
+        }
+        using var app = builder.Build();
+        app.Run();
+
+        var target = Assert.IsType<KubernetesResource>(consumer.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget);
+        Assert.Equal($"{(https ? "https" : "http")}://{hostname.ToLowerInvariant()}", await target.EnvironmentVariables["ORIGIN"].ParameterSource!.GetValueAsync(default));
+        if (gateway)
+        {
+            var route = builder.Resources.OfType<KubernetesGatewayResource>().Single();
+            Assert.Equal("*.example.com", route.GeneratedGateway!.Spec.Listeners.Single(listener => listener.Protocol == "HTTPS").Hostname);
+        }
+        else
+        {
+            var route = builder.Resources.OfType<KubernetesIngressResource>().Single();
+            Assert.Equal(["*.example.com"], Assert.Single(route.GeneratedIngress!.Spec.Tls).Hosts);
+        }
+    }
+
     [Fact]
     public async Task BrowserOriginInputsKeepDistinctEndpointIdentities()
     {

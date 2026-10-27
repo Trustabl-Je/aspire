@@ -19,13 +19,13 @@
         "DIRECT": "{frontend-http-BrowserOriginsJson.value}",
         "COMPOSITE": "prefix/{frontend-http-BrowserOriginsJson.value}/suffix",
         "WRAPPED": "{frontend-http-BrowserOriginsJson.value}",
-        "SELECTED": "{cond-frontend-bindings-http-tlsenabled-3090760e.connectionString}",
+        "SELECTED": "{cond-frontend-bindings-http-tlsenabled-4f3d6af1.connectionString}",
         "ENCODED": "{value-2d0564a098308e9b-uri-encoded.connectionString}",
         "ENDPOINT": "{frontend.bindings.http.url}",
         "HOST": "{frontend.bindings.http.host}"
       }
     },
-    "cond-frontend-bindings-http-tlsenabled-3090760e": {
+    "cond-frontend-bindings-http-tlsenabled-4f3d6af1": {
       "type": "value.v0",
       "connectionString": "{frontend-http-BrowserOriginsJson.value}"
     },

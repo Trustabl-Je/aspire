@@ -107,7 +107,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
         builder.Configuration["Parameters:frontend-http-BrowserOriginsJson"] = "[\"https://public.example\",\"https://alias.example\"]";
         var frontend = builder.AddContainer("frontend", "nginx:alpine").WithHttpEndpoint(port: 8080, targetPort: 8080);
-        var origin = frontend.GetEndpoint("http").BrowserOrigins.First;
+        var origin = frontend.GetEndpoint("HTTP").BrowserOrigins.First;
         builder.AddContainer("backend", "nginx:alpine")
             .WithEnvironment("ORIGIN", origin)
             .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins.Join())

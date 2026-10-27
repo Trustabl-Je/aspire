@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -36,7 +37,7 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
         {
             foreach (var path in ingress.Paths.Where(path => Matches(path.Endpoint)))
             {
-                if (!AddOrigins(path.Host, ingress.Hostnames, ingress.TlsConfigs.Count > 0))
+                if (!AddOrigins(path.Host, ingress.Hostnames, ingress.TlsConfigs.Count > 0, gateway: false))
                 {
                     return null;
                 }
@@ -47,7 +48,7 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
         {
             foreach (var route in gateway.Routes.Where(route => Matches(route.Endpoint)))
             {
-                if (!AddOrigins(route.Host, gateway.Hostnames, gateway.TlsConfigs.Count > 0))
+                if (!AddOrigins(route.Host, gateway.Hostnames, gateway.TlsConfigs.Count > 0, gateway: true))
                 {
                     return null;
                 }
@@ -66,7 +67,7 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
             string.Equals(endpoint.Resource.Name, reference.Endpoint.Resource.Name, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(endpoint.EndpointName, reference.Endpoint.EndpointName, StringComparison.OrdinalIgnoreCase);
 
-        bool AddOrigins(string? routeHost, IReadOnlyList<ReferenceExpression> hostnames, bool tls)
+        bool AddOrigins(string? routeHost, IReadOnlyList<ReferenceExpression> hostnames, bool tls, bool gateway)
         {
             // Host-scoped routes override inherited hostnames. Wildcard/hostless routes and
             // deferred host expressions cannot establish a concrete published default.
@@ -82,7 +83,11 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
                 // Use HTTPS only when that listener also serves the selected hostname.
                 var usesTls = tls && (routeHost is null || hostnames.Count == 0 ||
                     hostnames.Any(hostname => hostname.ValueProviders.Count == 0 &&
-                        string.Equals(hostname.ValueExpression, routeHost, StringComparison.OrdinalIgnoreCase)));
+                        MatchesHostname(hostname.ValueExpression, routeHost, gateway)));
+                if (tls && !usesTls && hostnames.Any(hostname => hostname.ValueProviders.Count != 0))
+                {
+                    return false;
+                }
                 if (host.ValueProviders.Count != 0 ||
                     Uri.CheckHostName(host.ValueExpression) is not (UriHostNameType.Dns or UriHostNameType.IPv4 or UriHostNameType.IPv6) ||
                     !Uri.TryCreate($"{(usesTls ? "https" : "http")}://{host.ValueExpression}", UriKind.Absolute, out var uri))
@@ -95,6 +100,25 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
 
             return true;
         }
+    }
+
+    private static bool MatchesHostname(string pattern, string hostname, bool gateway)
+    {
+        if (!HostString.MatchesAny(hostname, [pattern]))
+        {
+            return false;
+        }
+
+        // HostString supports Gateway-style multi-label wildcard matching. Ingress
+        // additionally restricts "*.example.com" to a single label before the suffix.
+        // https://kubernetes.io/docs/concepts/services-networking/ingress/#hostname-wildcards
+        if (gateway || !pattern.StartsWith("*.", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var prefixLength = hostname.Length - pattern.Length + 1;
+        return !hostname.AsSpan(0, prefixLength).Contains('.');
     }
 
     public ILogger Logger => logger;

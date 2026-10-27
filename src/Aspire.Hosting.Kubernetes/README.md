@@ -40,6 +40,7 @@ Browser-origin endpoint properties use deployment inputs rather than internal Ku
 For example, `frontend.GetEndpoint("http").BrowserOrigins.First` reads `Parameters:frontend-http-BrowserOrigin`, which `aspire deploy` supplies through its Helm values override file.
 The `BrowserOrigins` and `BrowserOriginsJson` inputs accept the requested comma-separated and JSON representations respectively; published charts retain placeholders for these inputs.
 Explicit literal hostnames on matching Ingress paths or Gateway routes provide overridable defaults. Route-specific hostnames override inherited hostnames, and matching TLS configuration selects HTTPS.
+Concrete route hostnames also match wildcard HTTPS listener scopes. Ingress wildcards match one label; Gateway wildcards can match multiple labels. This uses configured routing hostnames, not certificate contents.
 Hostless routes, wildcard hosts, and deferred hostname expressions still require an explicit origin input; internal service DNS and controller-assigned addresses are not assumed to be browser origins.
 Different endpoint identities retain separate inputs even when their readable names collide.
 

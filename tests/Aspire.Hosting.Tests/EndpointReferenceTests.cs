@@ -10,6 +10,41 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class EndpointReferenceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuilderGetEndpointPreservesCanonicalName(bool explicitNetwork)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080);
+
+        var endpoint = explicitNetwork
+            ? web.GetEndpoint("HTTP", KnownNetworkIdentifiers.LocalhostNetwork)
+            : web.GetEndpoint("HTTP");
+
+        Assert.Equal("http", endpoint.EndpointName);
+        Assert.Same(web.Resource.Annotations.OfType<EndpointAnnotation>().Single(), endpoint.EndpointAnnotation);
+        Assert.Equal(explicitNetwork ? KnownNetworkIdentifiers.LocalhostNetwork : null, endpoint.ContextNetworkID);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuilderGetEndpointSupportsLaterDeclaration(bool explicitNetwork)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image");
+        var endpoint = explicitNetwork
+            ? web.GetEndpoint("http", KnownNetworkIdentifiers.LocalhostNetwork)
+            : web.GetEndpoint("http");
+        Assert.False(endpoint.Exists);
+
+        web.WithHttpEndpoint(targetPort: 8080);
+
+        Assert.True(endpoint.Exists);
+        Assert.Same(web.Resource.Annotations.OfType<EndpointAnnotation>().Single(), endpoint.EndpointAnnotation);
+    }
+
     [Fact]
     public async Task GetValueAsync_WaitsForEndpointAllocation()
     {
