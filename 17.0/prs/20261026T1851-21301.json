@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI artifact packaging; no user-facing impact",
+  "mergedAt": "2026-10-26T18:51:27Z",
+  "number": 21301,
+  "runDate": "2026-10-27T00:06:26Z",
+  "status": "excluded",
+  "title": "[automated] fix(ci): keep CLI payloads out of NuGet-only artifacts"
+}

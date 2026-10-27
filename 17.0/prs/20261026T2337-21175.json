@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Removal of unused internal helper",
+  "mergedAt": "2026-10-26T23:37:36Z",
+  "number": 21175,
+  "runDate": "2026-10-27T00:06:26Z",
+  "status": "excluded",
+  "title": "Remove unused TransactionalAction helper"
+}

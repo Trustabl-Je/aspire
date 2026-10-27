@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test trigger map instructions; engineering only",
+  "mergedAt": "2026-10-26T17:45:36Z",
+  "number": 21302,
+  "runDate": "2026-10-27T00:06:26Z",
+  "status": "excluded",
+  "title": "[ci] Add instructions for the test trigger map and simplify it"
+}

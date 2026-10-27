@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site/tooling change; no matching changelog entry",
+  "mergedAt": "2026-10-26T17:25:18Z",
+  "number": 1929,
+  "runDate": "2026-10-27T00:06:26Z",
+  "status": "excluded",
+  "title": "Speed up the frontend build with Bun, parallel prerender and incremental builds"
+}

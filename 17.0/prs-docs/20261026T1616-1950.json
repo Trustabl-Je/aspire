@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site/tooling change; no matching changelog entry",
+  "mergedAt": "2026-10-26T16:16:29Z",
+  "number": 1950,
+  "runDate": "2026-10-27T00:06:26Z",
+  "status": "excluded",
+  "title": "Interrupt stale homepage AppHost animations"
+}

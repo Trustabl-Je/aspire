@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Docs site/tooling change; no matching changelog entry",
+  "mergedAt": "2026-10-26T20:22:16Z",
+  "number": 1954,
+  "runDate": "2026-10-27T00:06:26Z",
+  "status": "excluded",
+  "title": "Bump the nuget-selected group with 9 updates"
+}
